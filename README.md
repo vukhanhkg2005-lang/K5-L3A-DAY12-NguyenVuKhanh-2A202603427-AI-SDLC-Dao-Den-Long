@@ -1,7 +1,7 @@
 # Đảo Đèn Lồng — Day 12 AI SDLC Lab (v1.0.0)
 
 > **Video Demo (< 5 phút · 04:41):** [Xem video demo (.mp4)](docs/demo/demo.mp4) · **Phát hành:** [GitHub Release v1.0.0](https://github.com/vukhanhkg2005-lang/K5-L3A-DAY12-NguyenVuKhanh-2A202603427-AI-SDLC-Dao-Den-Long/releases/tag/v1.0.0)  
-> **Sinh viên:** Nguyễn Vũ Khánh (`2A202603427`) · **Lớp:** K5-L3A · **Contract:** `v1.3`
+> **Sinh viên:** Nguyễn Vũ Khanh (`2A202603427`) · **Lớp:** K5-L3A · **Contract:** `v1.3`
 
 **Đảo Đèn Lồng** là game 3D góc nhìn thứ ba qua **3 Đêm (Đảo Bến, Đảo Cau, Đảo Chuông)**. Người chơi điều khiển **Mây** (đội nón lá treo đèn lồng nhỏ) gom đom đóm, thắp sáng và **châm dầu giữ đảo sáng tới bình minh** (`≥ 60%` số đèn sáng), đối phó **Bóng Mực** hút dầu, **Gió Lạc** cướp đom đóm và **Gió mạnh**.
 

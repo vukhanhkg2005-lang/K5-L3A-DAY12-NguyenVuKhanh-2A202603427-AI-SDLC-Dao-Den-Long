@@ -1,6 +1,6 @@
 # Retrospective Dự án — Đảo Đèn Lồng (Day 12 AI SDLC Lab · v1.0.0)
 
-- **Sinh viên:** Nguyễn Vũ Khánh (`2A202603427`) · **Lớp:** K5-L3A
+- **Sinh viên:** Nguyễn Vũ Khanh (`2A202603427`) · **Lớp:** K5-L3A
 - **Phạm vi:** 4 Phase liên tiếp (`PRD-0` → `Ticket-02` → `Ticket-03` → `Ticket-04`, Contract `v1.0` → `v1.3`)
 
 ---
