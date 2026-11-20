@@ -4,154 +4,432 @@ import { distXZ } from './sim/math.js';
 import { createSceneRenderer } from './render/scene.js';
 import { createAudioEngine } from './render/audio.js';
 
+const SETTINGS_KEY = 'ddl_settings_v2';
+
+const NIGHT_STORIES = {
+  1: {
+    name: 'Đảo Bến',
+    quote:
+      '“Mây ơi, sương đen đã trùm lấy Đảo Bến rồi. Hãy gom đủ 10 đom đóm cho mỗi chiếc Đèn Lồng Lớn, thắp sáng cả 5 ngọn đèn trước khi bình minh lên nhé!” — Ông Đăng',
+    meta: '5 Đèn Lồng Lớn · Thời gian 05:00 · Cẩn thận đừng rơi xuống biển mây!',
+  },
+  2: {
+    name: 'Đảo Cau',
+    quote:
+      '“Đêm nay khó hơn đấy, cháu ạ. Hai hòn đảo nối bằng chiếc cầu tre chênh vênh, lại có bọn Gió Lạc hay rình cướp đom đóm. Nhớ dùng bục nhảy và Bùa Gió trên cầu nhé!” — Ông Đăng',
+    meta: '6 Đèn Lồng Lớn · Thời gian 05:30 · Mới: Cầu tre, Bục nhảy, Gió Lạc & Bùa Gió',
+  },
+  3: {
+    name: 'Đảo Chuông',
+    quote:
+      '“Ngọn tháp chuông trên đỉnh Đảo Chuông đang chờ ánh sáng cuối cùng. Cơn gió đêm nay rất mạnh, hãy leo qua dốc gỗ, bật lên tầng tháp và mang bình minh trở lại!” — Ông Đăng',
+    meta: '7 Đèn Lồng Lớn · Thời gian 06:00 · 3 tầng đảo, Dốc, Bục nhảy & Gió mạnh mỗi 30s',
+  },
+};
+
+function loadSettings() {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        volume: typeof parsed.volume === 'number' ? parsed.volume : 0.7,
+        sensitivity: typeof parsed.sensitivity === 'number' ? parsed.sensitivity : 0.35,
+      };
+    }
+  } catch {
+    // Ignore storage restriction
+  }
+  return { volume: 0.7, sensitivity: 0.35 };
+}
+
+function saveSettings(s) {
+  try {
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch {
+    // Ignore storage restriction
+  }
+}
+
+const settings = loadSettings();
+const audio = createAudioEngine(settings.volume);
+
+// DOM elements
 const canvasRoot = document.getElementById('canvas-root');
+const hud = document.getElementById('hud');
+const hudNightLabel = document.getElementById('hud-night-label');
 const hudFlames = document.getElementById('hud-flames');
-const hudMotes = document.getElementById('hud-motes');
-const hudLanterns = document.getElementById('hud-lanterns');
+const hudFps = document.getElementById('hud-fps');
+const hudCharmPill = document.getElementById('hud-charm-pill');
 const hudTime = document.getElementById('hud-time');
+const hudWindPill = document.getElementById('hud-wind-pill');
+const hudLanterns = document.getElementById('hud-lanterns');
 const hudScore = document.getElementById('hud-score');
-const hudPulse = document.getElementById('hud-pulse');
+const hudMotesText = document.getElementById('hud-motes-text');
+const hudMoteSlots = document.getElementById('hud-mote-slots');
 const contextPrompt = document.getElementById('context-prompt');
+const iconDash = document.getElementById('icon-dash');
+const cdDash = document.getElementById('cd-dash');
+const iconPulse = document.getElementById('icon-pulse');
+const cdPulse = document.getElementById('cd-pulse');
+const lanternArrow = document.getElementById('lantern-arrow');
+const lanternArrowHead = lanternArrow.querySelector('.lantern-arrow-head');
+const lanternArrowDist = document.getElementById('lantern-arrow-dist');
 
-const overlay = document.getElementById('overlay');
-const overlayTitle = document.getElementById('overlay-title');
-const overlayDesc = document.getElementById('overlay-desc');
-const overlayStats = document.getElementById('overlay-stats');
-const btnPlay = document.getElementById('btn-play');
-const btnAudio = document.getElementById('btn-audio');
-const btnRestartHud = document.getElementById('btn-restart-hud');
+const screenMenu = document.getElementById('screen-menu');
+const screenIntro = document.getElementById('screen-intro');
+const screenPause = document.getElementById('screen-pause');
+const screenSettings = document.getElementById('screen-settings');
+const screenResult = document.getElementById('screen-result');
+const resultCard = document.getElementById('result-card');
 
-const audio = createAudioEngine();
+const introBadge = document.getElementById('intro-badge');
+const introTitle = document.getElementById('intro-title');
+const introQuote = document.getElementById('intro-quote');
+const introMeta = document.getElementById('intro-meta');
 
+const resultBadge = document.getElementById('result-badge');
+const resultTitle = document.getElementById('result-title');
+const resultDesc = document.getElementById('result-desc');
+const resultStats = document.getElementById('result-stats');
+const btnResultPrimary = document.getElementById('btn-result-primary');
+
+const inputVolume = document.getElementById('input-volume');
+const valVolume = document.getElementById('val-volume');
+const inputSens = document.getElementById('input-sens');
+const valSens = document.getElementById('val-sens');
+const btnMute = document.getElementById('btn-mute');
+
+// Build 10 mote bar slots
+const moteSlotEls = [];
+for (let i = 0; i < contract.tuning.carry_capacity; i++) {
+  const el = document.createElement('div');
+  el.className = 'mote-slot';
+  hudMoteSlots.appendChild(el);
+  moteSlotEls.push(el);
+}
+
+// Sync settings UI
+inputVolume.value = String(Math.round(settings.volume * 100));
+valVolume.textContent = `${Math.round(settings.volume * 100)}%`;
+inputSens.value = String(Math.round(settings.sensitivity * 100));
+valSens.textContent = settings.sensitivity.toFixed(2);
+
+// Game Flow State
+let currentNight = 1;
+let campaignTotalScore = 0;
 let seedCounter = 2026;
+let mode = 'menu'; // 'menu' | 'intro' | 'playing' | 'paused' | 'result'
+let settingsReturnMode = 'menu';
 let sim = null;
 let sceneRenderer = null;
-let isRunning = false;
 let camYawDeg = 0;
+let pendingPauseToggle = false;
+let lastCountdownSec = -1;
+let wasWindWarnOrActive = false;
 
-// Input state
 const keys = new Set();
 let isDragging = false;
 let lastPointerX = 0;
 
-function initGame(startPlaying) {
-  sim = createSimulation({
-    seed: seedCounter++,
-    night: 1,
-    tuning: contract.tuning,
-  });
-  camYawDeg = 0;
+function hideAllOverlays() {
+  screenMenu.classList.add('hidden');
+  screenIntro.classList.add('hidden');
+  screenPause.classList.add('hidden');
+  screenSettings.classList.add('hidden');
+  screenResult.classList.add('hidden');
+}
 
+function showMainMenu() {
+  mode = 'menu';
+  hideAllOverlays();
+  hud.classList.add('hidden');
+  lanternArrow.classList.add('hidden');
+  screenMenu.classList.remove('hidden');
+}
+
+function showNightIntro(night) {
+  currentNight = night;
+  mode = 'intro';
+  const info = NIGHT_STORIES[night];
+  introBadge.textContent = `ĐÊM ${night} · ${info.name.toUpperCase()}`;
+  introTitle.textContent = `Đêm ${night}: ${info.name}`;
+  introQuote.textContent = info.quote;
+  introMeta.textContent = info.meta;
+
+  sim = createSimulation({ seed: seedCounter++, night, tuning: contract.tuning });
+  camYawDeg = 0;
   if (!sceneRenderer) {
     sceneRenderer = createSceneRenderer(canvasRoot, sim.getRenderState());
   }
 
-  isRunning = startPlaying;
-  if (startPlaying) {
-    overlay.classList.add('hidden');
-  }
+  hideAllOverlays();
+  hud.classList.add('hidden');
+  lanternArrow.classList.add('hidden');
+  screenIntro.classList.remove('hidden');
+}
+
+function startNightPlay() {
+  audio.unlock();
+  mode = 'playing';
+  lastCountdownSec = -1;
+  wasWindWarnOrActive = false;
+  pendingPauseToggle = false;
+  hideAllOverlays();
+  hud.classList.remove('hidden');
   updateHud(sim.getRenderState());
+}
+
+function togglePauseMenu() {
+  if (mode === 'playing' || mode === 'paused') {
+    pendingPauseToggle = true;
+  }
+}
+
+function openSettings(fromMode) {
+  settingsReturnMode = fromMode;
+  hideAllOverlays();
+  screenSettings.classList.remove('hidden');
+}
+
+function showResultScreen(rs) {
+  mode = 'result';
+  hideAllOverlays();
+  lanternArrow.classList.add('hidden');
+  resultCard.classList.remove('dawn-theme');
+
+  const won = rs.state === 'won';
+  const litCount = rs.lanterns.filter((l) => l.lit).length;
+
+  if (won) {
+    campaignTotalScore += rs.score;
+    if (currentNight < 3) {
+      resultBadge.textContent = `HOÀN THÀNH ĐÊM ${currentNight}`;
+      resultTitle.textContent = `${rs.mapName} Bừng Sáng!`;
+      resultDesc.textContent = `Mây đã thắp đủ ${litCount}/${rs.lanterns.length} Đèn Lồng Lớn. Sẵn sàng tiến tới Đêm ${currentNight + 1}!`;
+      btnResultPrimary.textContent = `Sang Đêm ${currentNight + 1} →`;
+    } else {
+      resultCard.classList.add('dawn-theme');
+      resultBadge.textContent = 'BÌNH MINH ĐÃ TỚI';
+      resultTitle.textContent = 'Chiến thắng cả 3 Hòn Đảo!';
+      resultDesc.textContent =
+        'Ánh sáng từ Đảo Bến, Đảo Cau và Đảo Chuông đã xua tan hoàn toàn sương đen. Biển mây rực rỡ đón bình minh mới!';
+      btnResultPrimary.textContent = 'Chơi lại từ Đêm 1';
+    }
+  } else {
+    resultBadge.textContent = `THẤT BẠI · ĐÊM ${currentNight}`;
+    resultTitle.textContent =
+      rs.endReason === 'no_flames' ? 'Ngọn Lửa Đã Tắt...' : 'Bình Minh Đến Quá Sớm...';
+    resultDesc.textContent =
+      rs.endReason === 'no_flames'
+        ? 'Mây đã mất hết Ngọn Lửa. Hãy thử lại và tận dụng Lướt cùng Tỏa Sáng nhé!'
+        : 'Hết thời gian trước khi toàn bộ Đèn Lồng kịp thắp sáng.';
+    btnResultPrimary.textContent = `Chơi lại Đêm ${currentNight}`;
+  }
+
+  resultStats.innerHTML = `
+    <div><strong>Điểm Đêm ${currentNight}:</strong> ${rs.score}</div>
+    <div><strong>Tổng điểm:</strong> ${campaignTotalScore}</div>
+    <div><strong>Đèn đã thắp:</strong> ${litCount} / ${rs.lanterns.length}</div>
+    <div><strong>Ngọn lửa còn:</strong> ${rs.player.flames}</div>
+  `;
+  screenResult.classList.remove('hidden');
 }
 
 function formatTime(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
-  const mm = String(Math.floor(s / 60)).padStart(2, '0');
-  const ss = String(s % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function updateHud(rs) {
+  hudNightLabel.textContent = `ĐÊM ${rs.night} · ${rs.mapName.toUpperCase()}`;
   hudFlames.textContent = rs.player.flames > 0 ? '🔥'.repeat(rs.player.flames) : '💨';
-  hudMotes.textContent = `${rs.player.carried} / ${rs.tuning.carry_capacity}`;
+
+  hudTime.textContent = formatTime(rs.timeLeftS);
+  if (rs.timeLeftS <= 30) {
+    hudTime.classList.add('danger');
+  } else {
+    hudTime.classList.remove('danger');
+  }
+
+  // Last 10s countdown tick SFX
+  const secCeil = Math.ceil(rs.timeLeftS);
+  if (mode === 'playing' && secCeil <= 10 && secCeil > 0 && secCeil !== lastCountdownSec) {
+    lastCountdownSec = secCeil;
+    audio.playCountdownTick();
+  }
+
+  // Wind indicator on Night 3
+  if (rs.wind.warning) {
+    hudWindPill.textContent = '🍃 Gió mạnh sắp thổi (2s)!';
+    hudWindPill.classList.remove('hidden');
+  } else if (rs.wind.active) {
+    hudWindPill.textContent = `💨 Gió mạnh đang thổi (${Math.round(rs.wind.dirDeg)}°)`;
+    hudWindPill.classList.remove('hidden');
+  } else {
+    hudWindPill.classList.add('hidden');
+  }
+  const windAlert = rs.wind.warning || rs.wind.active;
+  if (windAlert && !wasWindWarnOrActive && mode === 'playing') {
+    audio.playWindWhoosh();
+  }
+  wasWindWarnOrActive = windAlert;
+
+  // Charm indicator
+  if (rs.player.charmLeft > 0.05) {
+    hudCharmPill.textContent = `🧧 Bùa Gió: ${rs.player.charmLeft.toFixed(1)}s`;
+    hudCharmPill.classList.remove('hidden');
+  } else {
+    hudCharmPill.classList.add('hidden');
+  }
 
   const litCount = rs.lanterns.filter((l) => l.lit).length;
   hudLanterns.textContent = `${litCount} / ${rs.lanterns.length}`;
-  hudTime.textContent = formatTime(rs.timeLeftS);
   hudScore.textContent = String(rs.score);
 
-  if (rs.pulseCooldownLeft > 0.05) {
-    hudPulse.textContent = `${rs.pulseCooldownLeft.toFixed(1)}s`;
-    hudPulse.className = 'stat-value pulse-cool';
-  } else if (rs.player.carried < rs.tuning.pulse_cost) {
-    hudPulse.textContent = `Cần ${rs.tuning.pulse_cost} đom đóm`;
-    hudPulse.className = 'stat-value pulse-cool';
-  } else {
-    hudPulse.textContent = 'Sẵn sàng';
-    hudPulse.className = 'stat-value pulse-ready';
+  // 10-slot mote bar
+  hudMotesText.textContent = `${rs.player.carried}/${rs.tuning.carry_capacity}`;
+  for (let i = 0; i < moteSlotEls.length; i++) {
+    moteSlotEls[i].classList.toggle('filled', i < rs.player.carried);
   }
 
-  // Context prompt near unlit lantern
+  // Dash cooldown icon
+  if (rs.player.charmLeft > 0) {
+    iconDash.className = 'ability-card charm-boost';
+    cdDash.textContent = 'Không hồi chiêu!';
+  } else if (rs.player.dashCdLeft > 0.05) {
+    iconDash.className = 'ability-card cooling';
+    cdDash.textContent = `${rs.player.dashCdLeft.toFixed(1)}s`;
+  } else {
+    iconDash.className = 'ability-card ready';
+    cdDash.textContent = 'Sẵn sàng';
+  }
+
+  // Pulse cooldown icon
+  if (rs.player.pulseCdLeft > 0.05) {
+    iconPulse.className = 'ability-card cooling';
+    cdPulse.textContent = `${rs.player.pulseCdLeft.toFixed(1)}s`;
+  } else if (rs.player.carried < rs.tuning.pulse_cost) {
+    iconPulse.className = 'ability-card cooling';
+    cdPulse.textContent = `Cần ${rs.tuning.pulse_cost} đom đóm`;
+  } else {
+    iconPulse.className = 'ability-card ready';
+    cdPulse.textContent = 'Sẵn sàng';
+  }
+
+  // Context prompt: "E — Nạp ánh sáng (x/10)"
   const nearLantern = rs.lanterns.find(
     (l) => !l.lit && distXZ(rs.player.pos, l.pos) <= rs.tuning.interact_radius
   );
-  if (isRunning && nearLantern) {
-    const need = rs.tuning.lantern_cost - nearLantern.deposited;
-    contextPrompt.textContent =
-      rs.player.carried > 0
-        ? `Bấm [E] nạp đom đóm vào ${nearLantern.id} (${nearLantern.deposited}/${rs.tuning.lantern_cost})`
-        : `${nearLantern.id} cần thêm ${need} đom đóm — hãy đi gom thêm!`;
+  if (mode === 'playing' && nearLantern) {
+    contextPrompt.textContent = `E — Nạp ánh sáng (${nearLantern.deposited}/${rs.tuning.lantern_cost})`;
     contextPrompt.classList.remove('hidden');
   } else {
     contextPrompt.classList.add('hidden');
   }
 }
 
-function showEndOverlay(rs) {
-  isRunning = false;
-  const won = rs.state === 'won';
-  overlayTitle.textContent = won ? 'Đảo Đèn Lồng Bừng Sáng!' : 'Sương Đen Đã Nuốt Ánh Đèn...';
-  if (won) {
-    overlayDesc.innerHTML =
-      'Mây đã thắp sáng toàn bộ <strong>5 Đèn Lồng Lớn</strong> trên Đảo Bến và xua tan màn đêm!';
-  } else if (rs.endReason === 'no_flames') {
-    overlayDesc.innerHTML = 'Ngọn lửa của Mây đã tắt vì bị <strong>Bóng Mực</strong> chạm quá nhiều lần.';
-  } else {
-    overlayDesc.innerHTML = 'Bình minh đã tới trước khi tất cả Đèn Lồng Lớn kịp thắp sáng.';
-  }
-
-  const litCount = rs.lanterns.filter((l) => l.lit).length;
-  overlayStats.innerHTML = `
-    <div><strong>Điểm số:</strong> ${rs.score}</div>
-    <div><strong>Đèn đã thắp:</strong> ${litCount} / ${rs.lanterns.length}</div>
-    <div><strong>Ngọn lửa còn lại:</strong> ${rs.player.flames}</div>
-    <div><strong>Thời gian còn lại:</strong> ${formatTime(rs.timeLeftS)}</div>
-  `;
-  overlayStats.classList.remove('hidden');
-  btnPlay.textContent = 'Chơi lại Đêm 1';
-  overlay.classList.remove('hidden');
-}
-
 function handleEvents(events, rs) {
   for (const ev of events) {
-    if (ev.name === 'mote_picked') {
-      audio.playMotePickup(ev.data.carried);
-    } else if (ev.name === 'deposit') {
-      audio.playDeposit();
-    } else if (ev.name === 'lantern_lit') {
-      audio.playLanternLit();
-    } else if (ev.name === 'pulse') {
+    if (ev.name === 'mote_picked') audio.playMotePickup(ev.data.carried);
+    else if (ev.name === 'charm_picked') audio.playCharmPickup();
+    else if (ev.name === 'deposit') audio.playDeposit();
+    else if (ev.name === 'lantern_lit') audio.playLanternLit();
+    else if (ev.name === 'pulse') {
       audio.playPulse();
       sceneRenderer.triggerPulseVisual(rs.player.pos);
-    } else if (ev.name === 'player_hit') {
-      audio.playHit();
+    } else if (ev.name === 'dash') audio.playDash();
+    else if (ev.name === 'player_hit') audio.playHit();
+    else if (ev.name === 'shade_spawned') audio.playShadeSpawn();
+    else if (ev.name === 'drifter_steal') audio.playDrifterSteal();
+    else if (ev.name === 'paused') {
+      mode = 'paused';
+      hideAllOverlays();
+      screenPause.classList.remove('hidden');
+    } else if (ev.name === 'resumed') {
+      mode = 'playing';
+      hideAllOverlays();
     } else if (ev.name === 'game_over') {
       if (ev.data.result === 'won') audio.playWin();
       else audio.playLose();
-      showEndOverlay(rs);
+      showResultScreen(rs);
     }
   }
 }
 
-// Keyboard & Mouse controls
+// Button Bindings
+document.getElementById('btn-start-campaign').addEventListener('click', () => {
+  campaignTotalScore = 0;
+  showNightIntro(1);
+});
+
+document.querySelectorAll('[data-select-night]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    campaignTotalScore = 0;
+    showNightIntro(Number(btn.dataset.selectNight));
+  });
+});
+
+document.getElementById('btn-begin-night').addEventListener('click', startNightPlay);
+document.getElementById('btn-menu-settings').addEventListener('click', () => openSettings('menu'));
+document.getElementById('btn-pause').addEventListener('click', togglePauseMenu);
+document.getElementById('btn-resume').addEventListener('click', togglePauseMenu);
+document.getElementById('btn-pause-restart').addEventListener('click', () => showNightIntro(currentNight));
+document.getElementById('btn-pause-settings').addEventListener('click', () => openSettings('paused'));
+document.getElementById('btn-pause-menu').addEventListener('click', showMainMenu);
+
+document.getElementById('btn-settings-close').addEventListener('click', () => {
+  saveSettings(settings);
+  hideAllOverlays();
+  if (settingsReturnMode === 'paused') screenPause.classList.remove('hidden');
+  else screenMenu.classList.remove('hidden');
+});
+
+inputVolume.addEventListener('input', () => {
+  settings.volume = Number(inputVolume.value) / 100;
+  valVolume.textContent = `${inputVolume.value}%`;
+  audio.setVolume(settings.volume);
+});
+
+inputSens.addEventListener('input', () => {
+  settings.sensitivity = Number(inputSens.value) / 100;
+  valSens.textContent = settings.sensitivity.toFixed(2);
+});
+
+btnMute.addEventListener('click', () => {
+  const muted = audio.toggleMute();
+  btnMute.textContent = muted ? '🔇' : '🔊';
+});
+
+btnResultPrimary.addEventListener('click', () => {
+  const rs = sim.getRenderState();
+  if (rs.state === 'won') {
+    if (currentNight < 3) {
+      showNightIntro(currentNight + 1);
+    } else {
+      campaignTotalScore = 0;
+      showNightIntro(1);
+    }
+  } else {
+    showNightIntro(currentNight);
+  }
+});
+
+document.getElementById('btn-result-menu').addEventListener('click', showMainMenu);
+
+// Keyboard & Pointer Controls
+let prevJumpKey = false;
+
 window.addEventListener('keydown', (e) => {
   keys.add(e.code);
-  if (e.code === 'KeyM') {
-    const on = audio.toggle();
-    btnAudio.textContent = on ? '🔊 Âm thanh (M)' : '🔇 Tắt tiếng (M)';
-  }
-  if (e.code === 'KeyR' && (isRunning || sim.getState() !== 'playing')) {
-    audio.unlock();
-    initGame(true);
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (mode === 'playing' || mode === 'paused') {
+      e.preventDefault();
+      togglePauseMenu();
+    }
+  } else if (e.code === 'KeyM') {
+    const muted = audio.toggleMute();
+    btnMute.textContent = muted ? '🔇' : '🔊';
   }
 });
 
@@ -172,68 +450,91 @@ window.addEventListener('pointermove', (e) => {
   if (!isDragging) return;
   const dx = e.clientX - lastPointerX;
   lastPointerX = e.clientX;
-  camYawDeg = (camYawDeg - dx * 0.35) % 360;
-});
-
-btnPlay.addEventListener('click', () => {
-  audio.unlock();
-  initGame(true);
-});
-
-btnRestartHud.addEventListener('click', () => {
-  audio.unlock();
-  initGame(true);
-});
-
-btnAudio.addEventListener('click', () => {
-  const on = audio.toggle();
-  btnAudio.textContent = on ? '🔊 Âm thanh (M)' : '🔇 Tắt tiếng (M)';
+  camYawDeg = (camYawDeg - dx * settings.sensitivity) % 360;
 });
 
 function buildLiveInput() {
   let mx = 0;
   let mz = 0;
-  // W = forward (+Z at yaw=0), S = backward (-Z), A = left (+X at yaw=0), D = right (-X at yaw=0)
   if (keys.has('KeyW') || keys.has('ArrowUp')) mz += 1;
   if (keys.has('KeyS') || keys.has('ArrowDown')) mz -= 1;
   if (keys.has('KeyA') || keys.has('ArrowLeft')) mx += 1;
   if (keys.has('KeyD') || keys.has('ArrowRight')) mx -= 1;
 
+  const jumpHeld = keys.has('Space');
+  if (jumpHeld && !prevJumpKey && sim && sim.getRenderState().player.grounded && mode === 'playing') {
+    audio.playJump();
+  }
+  prevJumpKey = jumpHeld;
+
+  const pauseVal = pendingPauseToggle;
+  pendingPauseToggle = false;
+
   return {
     move: [mx, mz],
     cam_yaw_deg: camYawDeg,
-    jump: keys.has('Space'),
-    interact: keys.has('KeyE') || keys.has('KeyF'),
-    pulse: keys.has('ShiftLeft') || keys.has('ShiftRight') || keys.has('KeyQ'),
+    jump: jumpHeld,
+    interact: keys.has('KeyE'),
+    pulse: keys.has('KeyQ') || keys.has('KeyF'),
+    dash: keys.has('ShiftLeft') || keys.has('ShiftRight'),
+    pause: pauseVal,
   };
 }
 
-// Fixed 60 Hz simulation accumulator loop
-initGame(false);
+// Initial background preview scene on Menu
+sim = createSimulation({ seed: seedCounter++, night: 1, tuning: contract.tuning });
+sceneRenderer = createSceneRenderer(canvasRoot, sim.getRenderState());
+
 let lastFrameMs = performance.now();
 let accumulator = 0;
+let fpsFrames = 0;
+let fpsTimer = 0;
 
 function animate(nowMs) {
   requestAnimationFrame(animate);
   const dtSec = Math.min(0.1, (nowMs - lastFrameMs) / 1000);
   lastFrameMs = nowMs;
 
-  if (keys.has('KeyJ')) camYawDeg = (camYawDeg + 110 * dtSec) % 360;
-  if (keys.has('KeyL')) camYawDeg = (camYawDeg - 110 * dtSec) % 360;
+  fpsFrames++;
+  fpsTimer += dtSec;
+  if (fpsTimer >= 0.5) {
+    hudFps.textContent = `${Math.round(fpsFrames / fpsTimer)} FPS`;
+    fpsFrames = 0;
+    fpsTimer = 0;
+  }
 
-  if (isRunning && sim.getState() === 'playing') {
+  if (mode === 'playing') {
+    if (keys.has('KeyJ')) camYawDeg = (camYawDeg + 110 * dtSec) % 360;
+    if (keys.has('KeyL')) camYawDeg = (camYawDeg - 110 * dtSec) % 360;
+  }
+
+  if ((mode === 'playing' || mode === 'paused') && !sim.isFinished()) {
     accumulator += dtSec;
-    while (accumulator >= DT && sim.getState() === 'playing') {
+    while (accumulator >= DT && !sim.isFinished()) {
       const events = sim.step(buildLiveInput());
       accumulator -= DT;
       if (events.length > 0) {
         handleEvents(events, sim.getRenderState());
       }
+      if (mode === 'paused') {
+        accumulator = 0;
+        break;
+      }
     }
     updateHud(sim.getRenderState());
   }
 
-  sceneRenderer.syncAndRender(sim.getRenderState(), camYawDeg, dtSec);
+  const rs = sim.getRenderState();
+  const { offscreenIndicator } = sceneRenderer.syncAndRender(rs, camYawDeg, dtSec);
+  if (mode === 'playing' && offscreenIndicator) {
+    lanternArrow.classList.remove('hidden');
+    lanternArrow.style.left = `${offscreenIndicator.x}px`;
+    lanternArrow.style.top = `${offscreenIndicator.y}px`;
+    lanternArrowHead.style.transform = `rotate(${offscreenIndicator.deg}deg)`;
+    lanternArrowDist.textContent = `${offscreenIndicator.distM}m`;
+  } else {
+    lanternArrow.classList.add('hidden');
+  }
 }
 
 requestAnimationFrame(animate);
