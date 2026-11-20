@@ -1,16 +1,16 @@
 ---
 name: verify-phase
-description: Run all unit tests, headless scenarios, determinism checks, and production build, then save fresh real evidence to docs/proof/.
+description: Run unit tests, Phase 1 regression + Phase 2 headless scenarios, 3-night determinism, 21600-tick Night 3 benchmark, and production build, saving real evidence to docs/evidence/phase2/.
 ---
 
-# Verify Phase Skill
+# Verify Phase Skill (Phase 2 — Contract v1.1)
 
-Use this skill at the end of every implementation milestone and before tagging `phase-N`.
+Use this skill at every milestone and before tagging `phase-2`.
 
 ## Steps
-1. Run unit tests: `npm run test:unit`
-2. Run headless contract scenarios & determinism check: `npm run test:scenarios`
-3. Run production build: `npm run build`
-4. Capture real command output and scenario results into `docs/proof/phase-N/`.
-5. Confirm `game.contract.json` tuning values match simulation behavior and every requirement in the phase checklist has verifiable evidence.
-6. Never edit output logs manually; if any check fails, fix the code and re-run.
+1. Run unit tests (including Contract v1.1 tick order & physics): `npm run test:unit`
+2. Run headless scenarios (Phase 1 regression + all Phase 2 mechanics + 3-night determinism + exit code 2): `npm run test:scenarios`
+3. Run 21,600-tick Night 3 headless benchmark and assert elapsed wall time `<= 30 s`.
+4. Run production build: `npm run build`
+5. Save real command outputs and JSONL traces into `docs/evidence/phase2/` (never hand-edit proof files).
+6. Verify every item in `docs/phase2-spec.md` has corresponding passing evidence.
