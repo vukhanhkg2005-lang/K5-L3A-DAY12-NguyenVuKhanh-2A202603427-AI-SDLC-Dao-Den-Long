@@ -29,15 +29,15 @@
         </div>
 
         <div class="hud-box hud-top-center">
-          <div class="hud-sub">THỜI GIAN</div>
-          <div id="hud-time" class="timer-value">05:00</div>
+          <div class="hud-sub">TỚI BÌNH MINH</div>
+          <div id="hud-time" class="timer-value">04:00</div>
           <div id="hud-wind-pill" class="status-pill wind-pill hidden">Gió mạnh sắp tới!</div>
         </div>
 
         <div class="hud-box hud-top-right">
           <div class="hud-right-row">
             <div>
-              <div class="hud-sub">ĐÈN LỒNG</div>
+              <div id="hud-lantern-goal" class="hud-sub">ĐÈN LỒNG (CẦN ≥ 3)</div>
               <div id="hud-lanterns" class="hud-big gold">0 / 5</div>
             </div>
             <div>
@@ -147,6 +147,10 @@
           <label class="setting-row">
             <span>Độ nhạy chuột: <strong id="val-sens">0.35</strong></span>
             <input id="input-sens" type="range" min="10" max="120" step="5" value="35" />
+          </label>
+          <label class="setting-toggle">
+            <input id="input-colorblind" type="checkbox" />
+            <span>Bảng màu dễ phân biệt (Chế độ mù màu)</span>
           </label>
         </div>
         <button id="btn-settings-close" class="primary-btn" type="button">Lưu & Quay lại</button>

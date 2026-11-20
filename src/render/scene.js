@@ -15,12 +15,52 @@ const PALETTE = {
   moteHalo: 0xffe58a,
   shadeBody: 0x120a1a,
   shadeRim: 0x7a3cff,
+  shadeRimColorblind: 0x00b3ff,
   shadeStunned: 0x3a3450,
   mayCloak: 0xe8e2d0,
   mayScarf: 0xc8102e,
   gold: 0xf2c14e,
   drifter: 0x8fa3b8,
+  danger: 0xff5a5f,
+  dangerColorblind: 0xffffff,
 };
+
+function createTornPaperTexture() {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  // Base dull lantern paper (#5B5F6E)
+  ctx.fillStyle = '#5B5F6E';
+  ctx.fillRect(0, 0, size, size);
+  // Subtle horizontal bamboo ribs
+  ctx.strokeStyle = 'rgba(20, 22, 32, 0.45)';
+  ctx.lineWidth = 2;
+  for (let y = 16; y < size; y += 24) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(size, y);
+    ctx.stroke();
+  }
+  // Distinct dark jagged tear marks so unlit lanterns are identifiable without color
+  ctx.fillStyle = '#181A24';
+  const tears = [
+    [[24, 18], [46, 36], [30, 56], [52, 74], [26, 98], [18, 72], [32, 50], [16, 32]],
+    [[82, 22], [108, 44], [90, 68], [112, 92], [86, 108], [76, 80], [92, 56], [74, 34]],
+  ];
+  for (const pts of tears) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
 
 function createSoftGlowTexture(innerRgba, outerRgba) {
   const size = 128;
@@ -119,7 +159,7 @@ function buildMayMesh() {
   return { group, miniPivot, miniLight, miniLanternMat, charmRing };
 }
 
-function buildLanternMesh(safeRadius, interactRadius, glowTex) {
+function buildLanternMesh(safeRadius, interactRadius, glowTex, tornTex) {
   const group = new THREE.Group();
 
   const base = new THREE.Mesh(
@@ -137,22 +177,45 @@ function buildLanternMesh(safeRadius, interactRadius, glowTex) {
   pillar.castShadow = true;
   group.add(pillar);
 
+  // Paper head sub-group (squashed 20% in Y when unlit: scale.y = 0.8)
+  const headGroup = new THREE.Group();
+  headGroup.position.y = 2.65;
+
   const coreMat = new THREE.MeshStandardMaterial({
     color: PALETTE.lanternOff,
+    map: tornTex,
     emissive: PALETTE.lanternLit,
     emissiveIntensity: 0.05,
     roughness: 0.35,
   });
   const core = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.48, 1.05, 8), coreMat);
-  core.position.y = 3.15;
-  group.add(core);
+  core.position.y = 0.5;
+  headGroup.add(core);
 
   const roof = new THREE.Mesh(
     new THREE.ConeGeometry(1.02, 0.7, 8),
     new THREE.MeshStandardMaterial({ color: PALETTE.wood, roughness: 0.8 })
   );
-  roof.position.y = 3.96;
-  group.add(roof);
+  roof.position.y = 1.31;
+  headGroup.add(roof);
+  group.add(headGroup);
+
+  // 3D Billboarding Fuel Bar above lit lantern
+  const fuelBarGroup = new THREE.Group();
+  fuelBarGroup.position.y = 4.75;
+  const fuelBg = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.72, 0.22),
+    new THREE.MeshBasicMaterial({ color: 0x0e1430, side: THREE.DoubleSide })
+  );
+  const fuelFillMat = new THREE.MeshBasicMaterial({
+    color: PALETTE.lanternLit,
+    side: THREE.DoubleSide,
+  });
+  const fuelFill = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.14), fuelFillMat);
+  fuelFill.position.z = 0.01;
+  fuelBarGroup.add(fuelBg, fuelFill);
+  fuelBarGroup.visible = false;
+  group.add(fuelBarGroup);
 
   const light = new THREE.PointLight(PALETTE.lanternLit, 0, safeRadius * 2.6, 1.4);
   light.position.y = 3.25;
@@ -195,7 +258,19 @@ function buildLanternMesh(safeRadius, interactRadius, glowTex) {
   interactRing.position.y = 0.04;
   group.add(interactRing);
 
-  return { group, coreMat, light, haloMat, safeRingMat, interactRing };
+  return {
+    group,
+    headGroup,
+    coreMat,
+    light,
+    haloMat,
+    safeRingMat,
+    interactRing,
+    fuelBarGroup,
+    fuelFill,
+    fuelFillMat,
+    tornTex,
+  };
 }
 
 function buildShadeMesh() {
@@ -467,6 +542,8 @@ export function createSceneRenderer(container, initialState) {
   scene.add(moonLight);
 
   const glowTex = createSoftGlowTexture('rgba(255, 246, 194, 1)', 'rgba(255, 229, 138, 0.45)');
+  const tornTex = createTornPaperTexture();
+  let colorblindMode = false;
 
   // Sea of Clouds (#12384A) + Starfield (render-only creativity)
   const seaPlane = new THREE.Mesh(
@@ -578,7 +655,7 @@ export function createSceneRenderer(container, initialState) {
     scene.add(currentMapGroup);
 
     for (const l of rs.lanterns) {
-      const lm = buildLanternMesh(rs.tuning.safe_radius, rs.tuning.interact_radius, glowTex);
+      const lm = buildLanternMesh(rs.tuning.safe_radius, rs.tuning.interact_radius, glowTex, tornTex);
       lm.group.position.set(l.pos[0], l.pos[1], l.pos[2]);
       scene.add(lm.group);
       lanternMeshes.set(l.id, lm);
@@ -669,26 +746,52 @@ export function createSceneRenderer(container, initialState) {
       if (pulseWaveTime <= 0) pulseWave.visible = false;
     }
 
-    // 5. Lanterns
+    // 5. Lanterns (Phase 3: 3D fuel bar, 1 Hz low-fuel blink, unlit squashed 20% + torn paper)
+    const blink1Hz = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(visualTime * Math.PI * 2));
+    const dangerHex = colorblindMode ? PALETTE.dangerColorblind : PALETTE.danger;
     for (const l of rs.lanterns) {
       const lm = lanternMeshes.get(l.id);
       if (!lm) continue;
-      const ratio = Math.min(1, l.deposited / Math.max(1, rs.tuning.lantern_cost));
+      const reqCost = l.requiredCost || rs.tuning.lantern_cost;
+      const depRatio = Math.min(1, l.deposited / Math.max(1, reqCost));
+      const fuelRatio = Math.max(0, Math.min(1, l.fuel / Math.max(1, l.fuelMax || 100)));
+
       if (l.lit) {
-        const flicker = 1 + Math.sin(visualTime * 5 + l.pos[0]) * 0.06;
+        lm.headGroup.scale.set(1, 1.0, 1);
+        if (lm.coreMat.map !== null) {
+          lm.coreMat.map = null;
+          lm.coreMat.needsUpdate = true;
+        }
+        const lowBlink = l.isLowFuel ? blink1Hz : 1.0;
+        const flicker = (1 + Math.sin(visualTime * 5 + l.pos[0]) * 0.05) * lowBlink;
         lm.coreMat.color.setHex(PALETTE.lanternCore);
         lm.coreMat.emissiveIntensity = 2.1 * flicker;
         lm.light.intensity = 15 * flicker;
         lm.haloMat.opacity = 0.72 * flicker;
-        lm.safeRingMat.opacity = 0.22;
-        lm.interactRing.visible = false;
+        // Safe zone ring ONLY visible when fuel >= 30 (!isLowFuel)
+        lm.safeRingMat.opacity = l.isLowFuel ? 0 : 0.22;
+        lm.interactRing.visible = !l.isFull;
+
+        // 3D Billboarding Fuel Bar
+        lm.fuelBarGroup.visible = !l.isLowFuel || Math.sin(visualTime * Math.PI * 2) > -0.35;
+        lm.fuelBarGroup.quaternion.copy(camera.quaternion);
+        lm.fuelFill.scale.x = Math.max(0.01, fuelRatio);
+        lm.fuelFill.position.x = -(1 - Math.max(0.01, fuelRatio)) * 0.8;
+        lm.fuelFillMat.color.setHex(l.isLowFuel ? dangerHex : PALETTE.lanternLit);
       } else {
-        lm.coreMat.color.setHex(PALETTE.lanternOff);
-        lm.coreMat.emissiveIntensity = 0.06 + ratio * 0.9;
-        lm.light.intensity = ratio * 4.5;
-        lm.haloMat.opacity = ratio * 0.28;
+        // Unlit lantern: squashed 20% (scale.y = 0.8) + torn paper texture
+        lm.headGroup.scale.set(1, 0.8, 1);
+        if (lm.coreMat.map !== lm.tornTex) {
+          lm.coreMat.map = lm.tornTex;
+          lm.coreMat.needsUpdate = true;
+        }
+        lm.coreMat.color.setHex(0xffffff);
+        lm.coreMat.emissiveIntensity = 0.06 + depRatio * 0.75;
+        lm.light.intensity = depRatio * 3.5;
+        lm.haloMat.opacity = depRatio * 0.22;
         lm.safeRingMat.opacity = 0;
         lm.interactRing.visible = true;
+        lm.fuelBarGroup.visible = false;
       }
     }
 
@@ -726,7 +829,8 @@ export function createSceneRenderer(container, initialState) {
       }
     }
 
-    // 7. Shades (5 standard states)
+    // 7. Shades (6 standard states incl. drain; Colorblind #7A3CFF -> #00B3FF)
+    const rimHex = colorblindMode ? PALETTE.shadeRimColorblind : PALETTE.shadeRim;
     const activeShades = new Set();
     for (const s of rs.shades) {
       activeShades.add(s.id);
@@ -741,8 +845,10 @@ export function createSceneRenderer(container, initialState) {
       sm.group.rotation.y = Math.atan2(p.pos[0] - s.pos[0], p.pos[2] - s.pos[2]);
 
       const stunned = s.state === 'stunned';
+      const draining = s.state === 'drain';
       sm.stunRing.visible = stunned;
       sm.bodyMat.opacity = s.state === 'spawning' ? 0.45 : 1.0;
+      sm.group.scale.setScalar(draining ? 1.08 + Math.sin(visualTime * 10) * 0.08 : 1.0);
       if (stunned) {
         sm.stunRing.rotation.z = visualTime * 5;
         sm.bodyMat.color.setHex(PALETTE.shadeStunned);
@@ -750,9 +856,9 @@ export function createSceneRenderer(container, initialState) {
         sm.eyeMat.color.setHex(PALETTE.gold);
       } else {
         sm.bodyMat.color.setHex(PALETTE.shadeBody);
-        sm.bodyMat.emissive.setHex(PALETTE.shadeRim);
-        sm.bodyMat.emissiveIntensity = s.state === 'chase' ? 0.75 : 0.35;
-        sm.eyeMat.color.setHex(PALETTE.shadeRim);
+        sm.bodyMat.emissive.setHex(rimHex);
+        sm.bodyMat.emissiveIntensity = draining ? 1.15 : s.state === 'chase' ? 0.75 : 0.35;
+        sm.eyeMat.color.setHex(rimHex);
       }
     }
     for (const [id, sm] of shadeMeshes.entries()) {
@@ -862,6 +968,9 @@ export function createSceneRenderer(container, initialState) {
   return {
     syncAndRender,
     triggerPulseVisual,
+    setColorblindMode(enabled) {
+      colorblindMode = Boolean(enabled);
+    },
     dispose() {
       window.removeEventListener('resize', handleResize);
       renderer.dispose();
