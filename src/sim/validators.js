@@ -6,7 +6,14 @@ export class ContractFormatError extends Error {
   }
 }
 
-export const VALID_SHADE_STATES = new Set(['spawning', 'wander', 'chase', 'recoil', 'stunned']);
+export const VALID_SHADE_STATES = new Set([
+  'spawning',
+  'wander',
+  'chase',
+  'recoil',
+  'stunned',
+  'drain',
+]);
 export const VALID_DRIFTER_STATES = new Set(['idle', 'chase', 'flee', 'removed']);
 
 function isPlainObject(v) {
@@ -93,6 +100,7 @@ export function validateScenario(data) {
       'dash_cd_ticks',
       'pulse_cd_ticks',
       'charm_ticks',
+      'successful_lights',
     ]) {
       if (data.player[k] !== undefined && !isNonNegInt(data.player[k])) {
         throw new ContractFormatError(`scenario.player.${k} must be a non-negative integer`);
@@ -148,6 +156,15 @@ export function validateScenario(data) {
       if (s.state_ticks_left !== undefined && !isNonNegInt(s.state_ticks_left)) {
         throw new ContractFormatError(
           `scenario.shades[${i}].state_ticks_left must be a non-negative integer`
+        );
+      }
+      if (
+        s.target_lantern_id !== undefined &&
+        s.target_lantern_id !== null &&
+        typeof s.target_lantern_id !== 'string'
+      ) {
+        throw new ContractFormatError(
+          `scenario.shades[${i}].target_lantern_id must be a string or null`
         );
       }
     }
@@ -221,6 +238,18 @@ export function validateScenario(data) {
       }
       if (l.lit !== undefined && typeof l.lit !== 'boolean') {
         throw new ContractFormatError(`scenario.lanterns[${i}].lit must be a boolean`);
+      }
+      if (l.ever_lit !== undefined && typeof l.ever_lit !== 'boolean') {
+        throw new ContractFormatError(`scenario.lanterns[${i}].ever_lit must be a boolean`);
+      }
+      if (l.relit_count !== undefined && !isNonNegInt(l.relit_count)) {
+        throw new ContractFormatError(`scenario.lanterns[${i}].relit_count must be a non-negative integer`);
+      }
+      if (
+        l.fuel !== undefined &&
+        (typeof l.fuel !== 'number' || !Number.isFinite(l.fuel) || l.fuel < 0 || l.fuel > 100)
+      ) {
+        throw new ContractFormatError(`scenario.lanterns[${i}].fuel must be a number in [0, 100]`);
       }
     }
   }
