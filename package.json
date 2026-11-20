@@ -1,0 +1,23 @@
+{
+  "name": "dao-den-long",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Đảo Đèn Lồng — 3D Game (AI SDLC Lab Phase 1)",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "start": "vite preview --host 0.0.0.0 --port 4173",
+    "headless": "node src/headless.js",
+    "test:unit": "node --test tests/sim.test.js",
+    "test:scenarios": "node tests/run-scenarios.js",
+    "test": "npm run test:unit && npm run test:scenarios"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.7"
+  }
+}
