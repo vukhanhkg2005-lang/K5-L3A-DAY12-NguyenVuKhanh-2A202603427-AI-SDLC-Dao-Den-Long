@@ -62,8 +62,8 @@ function parseArgs(argv) {
     throw new Error('--seed must be an integer');
   }
   const night = Number(args.night);
-  if (args.night === null || !Number.isInteger(night) || night !== 1) {
-    throw new Error('--night must be 1 (Phase 1)');
+  if (args.night === null || !Number.isInteger(night) || night < 1 || night > 3) {
+    throw new Error('--night must be 1, 2, or 3');
   }
   const ticks = Number(args.ticks);
   if (args.ticks === null || !Number.isInteger(ticks) || ticks < 0) {
@@ -130,6 +130,14 @@ function main() {
     const lines = [];
     // Tick 0 snapshot: right after scenario setup, before applying any input
     lines.push(JSON.stringify(sim.getSnapshot()));
+    lines.push(
+      JSON.stringify({
+        type: 'event',
+        tick: 0,
+        name: 'night_start',
+        data: { night: opts.night },
+      })
+    );
 
     const currentInput = {
       move: [0, 0],
@@ -138,12 +146,13 @@ function main() {
       interact: false,
       pulse: false,
       dash: false,
+      pause: false,
     };
 
     let frameIdx = 0;
 
     for (let k = 0; k < opts.ticks; k++) {
-      if (sim.getState() !== 'playing') {
+      if (sim.isFinished()) {
         break;
       }
 
@@ -155,6 +164,7 @@ function main() {
         if (f.interact !== undefined) currentInput.interact = f.interact;
         if (f.pulse !== undefined) currentInput.pulse = f.pulse;
         if (f.dash !== undefined) currentInput.dash = f.dash;
+        if (f.pause !== undefined) currentInput.pause = f.pause;
       }
 
       const events = sim.step(currentInput);
@@ -167,7 +177,7 @@ function main() {
         lines.push(JSON.stringify(sim.getSnapshot()));
       }
 
-      if (sim.getState() !== 'playing') {
+      if (sim.isFinished()) {
         break;
       }
     }

@@ -13,8 +13,12 @@ export function distXZ(a, b) {
   return Math.hypot(a[0] - b[0], a[2] - b[2]);
 }
 
+export function dist3D(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
 /**
- * Transform [x, z] move input using Test Contract v1.0 rotation formula:
+ * Transform [x, z] move input using Test Contract rotation formula:
  * x' = x*cos(theta) + z*sin(theta)
  * z' = -x*sin(theta) + z*cos(theta)
  * Normalizes vectors with length > 1.
@@ -31,13 +35,4 @@ export function transformMoveInput(move, camYawDeg) {
   const c = Math.cos(theta);
   const s = Math.sin(theta);
   return [x * c + z * s, -x * s + z * c];
-}
-
-export function clampToCircleXZ(pos, radius) {
-  const d = Math.hypot(pos[0], pos[2]);
-  if (d > radius && d > EPS) {
-    const scale = radius / d;
-    pos[0] *= scale;
-    pos[2] *= scale;
-  }
 }
