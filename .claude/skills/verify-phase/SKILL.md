@@ -1,16 +1,15 @@
 ---
 name: verify-phase
-description: Run unit tests, Phase 1 regression + Phase 2 headless scenarios, 3-night determinism, 21600-tick Night 3 benchmark, and production build, saving real evidence to docs/evidence/phase2/.
+description: Run unit tests, Phase 1–2 regression + Phase 3 Contract v1.2 scenarios, 3-night determinism, benchmark, and production build, saving real evidence to docs/evidence/phase3/.
 ---
 
-# Verify Phase Skill (Phase 2 — Contract v1.1)
+# Verify Phase Skill (Phase 3 — Contract v1.2)
 
-Use this skill at every milestone and before tagging `phase-2`.
+Use this skill before tagging `phase-3`.
 
 ## Steps
-1. Run unit tests (including Contract v1.1 tick order & physics): `npm run test:unit`
-2. Run headless scenarios (Phase 1 regression + all Phase 2 mechanics + 3-night determinism + exit code 2): `npm run test:scenarios`
-3. Run 21,600-tick Night 3 headless benchmark and assert elapsed wall time `<= 30 s`.
-4. Run production build: `npm run build`
-5. Save real command outputs and JSONL traces into `docs/evidence/phase2/` (never hand-edit proof files).
-6. Verify every item in `docs/phase2-spec.md` has corresponding passing evidence.
+1. Run unit tests (`npm run test:unit`) — zero skipped tests allowed.
+2. Run headless scenarios (`node tests/run-scenarios.js --save-evidence`) covering Phase 1–2 non-replaced regressions, Phase 3 fuel/refuel/relight/drain/capacity/dawn_survived mechanics, 3-night determinism, exit code 2, and performance benchmark.
+3. Run production build (`npm run build`) and verify preview HTTP 200.
+4. Confirm ADR (`docs/adr/001-lantern-fuel-and-dawn-win.md`), `CHANGELOG.md`, and `docs/phase3-report.md` document every breaking change and updated/removed test.
+5. Never hand-edit proof logs; re-run commands if anything changes.
