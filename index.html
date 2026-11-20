@@ -3,21 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Đảo Đèn Lồng — Ba Hòn Đảo</title>
+    <title>Đảo Đèn Lồng — v1.0.0</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="canvas-root"></div>
 
+    <!-- Screen Flash Overlay (disabled in Reduce Motion mode) -->
+    <div id="hit-flash" class="hit-flash hidden" aria-hidden="true"></div>
+
     <!-- Off-screen Nearest Unlit Lantern Pointer -->
-    <div id="lantern-arrow" class="lantern-arrow hidden" aria-hidden="true">
-      <div class="lantern-arrow-head">▲</div>
-      <div id="lantern-arrow-dist" class="lantern-arrow-dist"></div>
+    <div id="lantern-arrow" class="edge-arrow lantern-arrow hidden" aria-hidden="true">
+      <div class="edge-arrow-head">▲</div>
+      <div id="lantern-arrow-dist" class="edge-arrow-dist"></div>
     </div>
 
-    <!-- Full HUD (Phase 2) -->
+    <!-- Off-screen Shade Spawn Directional Pointer (Accessibility) -->
+    <div id="shade-arrow" class="edge-arrow shade-arrow hidden" aria-hidden="true">
+      <div class="edge-arrow-head">▲</div>
+      <div id="shade-arrow-dist" class="edge-arrow-dist">Bóng Mực</div>
+    </div>
+
+    <!-- Full HUD (min 18px UI font at 1280x720 + Large Text 1.25x support) -->
     <div id="hud" class="hidden" aria-live="polite">
-      <!-- Top Row: Flames (Left) · Timer (Center) · Lanterns & Score (Right) -->
       <div class="hud-top">
         <div class="hud-box hud-top-left">
           <div id="hud-night-label" class="hud-sub">ĐÊM 1 · ĐẢO BẾN</div>
@@ -47,25 +55,21 @@
           </div>
           <div class="hud-mini-btns">
             <button id="btn-mute" class="mini-btn" type="button" title="Tắt/Bật âm (M)">🔊</button>
-            <button id="btn-pause" class="mini-btn" type="button" title="Tạm dừng (Esc/P)">⏸</button>
+            <button id="btn-pause" class="mini-btn" type="button" title="Tạm dừng">⏸</button>
           </div>
         </div>
       </div>
 
+      <!-- Visual Subtitles / Accessibility Alerts -->
+      <div id="visual-subtitles" class="visual-subtitles" role="status" aria-live="assertive"></div>
+
       <!-- Context Prompt -->
       <div id="context-prompt" class="context-prompt hidden">E — Nạp ánh sáng (0/10)</div>
 
-      <!-- Bottom Row: 10-slot Mote Bar (Center) · Dash & Pulse Cooldown Icons (Right) -->
+      <!-- Bottom Row -->
       <div class="hud-bottom">
         <div class="hud-bottom-spacer">
-          <div class="controls-mini">
-            <span><kbd>WASD</kbd> Đi</span>
-            <span><kbd>Space</kbd> Nhảy</span>
-            <span><kbd>Shift</kbd> Lướt</span>
-            <span><kbd>E</kbd> Nạp</span>
-            <span><kbd>Q</kbd>/<kbd>F</kbd> Tỏa Sáng</span>
-            <span><kbd>Esc</kbd> Tạm dừng</span>
-          </div>
+          <div id="hud-controls-mini" class="controls-mini"></div>
         </div>
 
         <div class="mote-bar-wrap">
@@ -75,12 +79,12 @@
 
         <div class="ability-icons">
           <div id="icon-dash" class="ability-card ready">
-            <div class="ability-key">SHIFT</div>
+            <div id="key-label-dash" class="ability-key">SHIFT</div>
             <div class="ability-name">Lướt</div>
             <div id="cd-dash" class="ability-cd">Sẵn sàng</div>
           </div>
           <div id="icon-pulse" class="ability-card ready">
-            <div class="ability-key">Q / F</div>
+            <div id="key-label-pulse" class="ability-key">Q</div>
             <div class="ability-name">Tỏa Sáng</div>
             <div id="cd-pulse" class="ability-cd">3 đom đóm</div>
           </div>
@@ -91,10 +95,10 @@
     <!-- Main Menu Overlay -->
     <div id="screen-menu" class="overlay">
       <div class="overlay-card">
-        <div class="overlay-badge">BA HÒN ĐẢO · AI SDLC LAB</div>
+        <div class="overlay-badge">PHÁT HÀNH v1.0.0 · BA HÒN ĐẢO</div>
         <h1>Đảo Đèn Lồng</h1>
         <p>
-          Cùng <strong>Mây</strong> thắp lại những ngọn Đèn Lồng Lớn qua 3 Đêm giữa biển mây:
+          Cùng <strong>Mây</strong> giữ sáng những ngọn Đèn Lồng Lớn tới bình minh qua 3 Đêm:
           <strong>Đảo Bến</strong>, <strong>Đảo Cau</strong> và <strong>Đảo Chuông</strong>.
         </p>
         <div class="menu-buttons">
@@ -104,8 +108,21 @@
             <button class="secondary-btn" data-select-night="2" type="button">Đêm 2 · Đảo Cau</button>
             <button class="secondary-btn" data-select-night="3" type="button">Đêm 3 · Đảo Chuông</button>
           </div>
-          <button id="btn-menu-settings" class="ghost-btn" type="button">⚙ Cài đặt</button>
+          <div class="menu-sub-row">
+            <button id="btn-menu-leaderboard" class="secondary-btn" type="button">🏆 Bảng xếp hạng</button>
+            <button id="btn-menu-settings" class="secondary-btn" type="button">⚙ Cài đặt & Tiếp cận</button>
+          </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Leaderboard Overlay -->
+    <div id="screen-leaderboard" class="overlay hidden">
+      <div class="overlay-card wide">
+        <div class="overlay-badge">TOP 10 CỤC BỘ</div>
+        <h2>🏆 Bảng xếp hạng</h2>
+        <div id="leaderboard-table-wrap" class="leaderboard-wrap"></div>
+        <button id="btn-leaderboard-close" class="primary-btn" type="button">Quay lại Menu</button>
       </div>
     </div>
 
@@ -126,19 +143,19 @@
         <div class="overlay-badge">TẠM DỪNG</div>
         <h2>Ngưng đọng màn đêm</h2>
         <div class="menu-buttons">
-          <button id="btn-resume" class="primary-btn" type="button">Tiếp tục (Esc)</button>
+          <button id="btn-resume" class="primary-btn" type="button">Tiếp tục</button>
           <button id="btn-pause-restart" class="secondary-btn" type="button">Chơi lại Đêm này</button>
-          <button id="btn-pause-settings" class="secondary-btn" type="button">⚙ Cài đặt</button>
+          <button id="btn-pause-settings" class="secondary-btn" type="button">⚙ Cài đặt & Tiếp cận</button>
           <button id="btn-pause-menu" class="ghost-btn" type="button">Về Menu chính</button>
         </div>
       </div>
     </div>
 
-    <!-- Settings Overlay -->
+    <!-- Settings & Accessibility Overlay -->
     <div id="screen-settings" class="overlay hidden">
-      <div class="overlay-card compact">
-        <div class="overlay-badge">CÀI ĐẶT</div>
-        <h2>Âm thanh & Điều khiển</h2>
+      <div class="overlay-card wide scrollable-card">
+        <div class="overlay-badge">CÀI ĐẶT & KHẢ NĂNG TIẾP CẬN</div>
+        <h2>Điều khiển & Hiển thị</h2>
         <div class="settings-list">
           <label class="setting-row">
             <span>Âm lượng tổng: <strong id="val-volume">70%</strong></span>
@@ -148,22 +165,59 @@
             <span>Độ nhạy chuột: <strong id="val-sens">0.35</strong></span>
             <input id="input-sens" type="range" min="10" max="120" step="5" value="35" />
           </label>
-          <label class="setting-toggle">
-            <input id="input-colorblind" type="checkbox" />
-            <span>Bảng màu dễ phân biệt (Chế độ mù màu)</span>
-          </label>
+
+          <div class="toggles-grid">
+            <label class="setting-toggle">
+              <input id="input-colorblind" type="checkbox" />
+              <span>Bảng màu dễ phân biệt (Mù màu)</span>
+            </label>
+            <label class="setting-toggle">
+              <input id="input-reduce-motion" type="checkbox" />
+              <span>Giảm chuyển động (tắt rung & chớp)</span>
+            </label>
+            <label class="setting-toggle">
+              <input id="input-large-text" type="checkbox" />
+              <span>Chữ lớn (×1.25)</span>
+            </label>
+          </div>
+
+          <div class="keybinds-section">
+            <div class="keybinds-header">
+              <strong>Đổi phím điều khiển</strong>
+              <button id="btn-reset-keys" class="mini-btn" type="button">Khôi phục mặc định</button>
+            </div>
+            <div id="keybind-warning" class="keybind-warning hidden"></div>
+            <div id="keybinds-grid" class="keybinds-grid"></div>
+          </div>
         </div>
         <button id="btn-settings-close" class="primary-btn" type="button">Lưu & Quay lại</button>
       </div>
     </div>
 
-    <!-- Night Result / Dawn Screen Overlay -->
+    <!-- Night Result / Dawn Screen Overlay (+ Leaderboard Save Form) -->
     <div id="screen-result" class="overlay hidden">
       <div id="result-card" class="overlay-card">
         <div id="result-badge" class="overlay-badge">KẾT QUẢ ĐÊM</div>
         <h1 id="result-title">Đảo Bừng Sáng!</h1>
         <p id="result-desc"></p>
         <div id="result-stats" class="overlay-stats"></div>
+
+        <!-- Local Leaderboard Submission (Dawn Victory or Any Loss) -->
+        <div id="score-submit-box" class="score-submit-box hidden">
+          <div class="score-submit-label">Lưu điểm vào Bảng xếp hạng (3–12 ký tự):</div>
+          <div class="score-submit-row">
+            <input
+              id="input-player-name"
+              type="text"
+              maxlength="12"
+              placeholder="Tên của bạn..."
+              autocomplete="off"
+            />
+            <button id="btn-save-score" class="secondary-btn" type="button">Lưu điểm</button>
+          </div>
+          <div id="score-submit-msg" class="score-submit-msg"></div>
+        </div>
+
         <div class="menu-buttons">
           <button id="btn-result-primary" class="primary-btn" type="button">Đêm tiếp theo</button>
           <button id="btn-result-menu" class="ghost-btn" type="button">Về Menu chính</button>

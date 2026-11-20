@@ -1,4 +1,4 @@
-name: CI — Verify Đảo Đèn Lồng
+name: CI — Verify Đảo Đèn Lồng (Contract v1.3)
 
 on:
   push:
@@ -23,5 +23,11 @@ jobs:
       - name: Install & Build (Contract build_cmd)
         run: npm ci && npm run build
 
-      - name: Run unit tests & headless Test Contract scenarios
+      - name: Run Unit Tests & Headless Contract v1.2/v1.3 Scenarios
         run: npm test
+
+      - name: Run 10-Night Headless Soak Test
+        run: node --expose-gc src/soak.js --seed 7 --nights 10 --out /tmp/soak-ci.json && cat /tmp/soak-ci.json
+
+      - name: Verify Leaderboard Export CLI
+        run: node src/run.js --export-leaderboard /tmp/lb-ci.json && cat /tmp/lb-ci.json

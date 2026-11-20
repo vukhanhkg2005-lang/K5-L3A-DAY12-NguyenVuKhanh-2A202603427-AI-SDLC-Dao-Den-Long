@@ -2,6 +2,7 @@ import { round3 } from './math.js';
 
 const DEG2RAD = Math.PI / 180;
 const STEP_UP = 0.55;
+const _moveRes = { x: 0, z: 0, blocked: false };
 
 function ringPoints(cx, cz, y, radius, startDeg, stepDeg, count) {
   const pts = [];
@@ -81,7 +82,10 @@ function getNight1Map() {
       return Math.hypot(x, z) <= 40.0 ? 0 : null;
     },
     resolveHorizontalMove(_oldX, _oldZ, newX, newZ, _currentY) {
-      return { x: newX, z: newZ, blocked: false };
+      _moveRes.x = newX;
+      _moveRes.z = newZ;
+      _moveRes.blocked = false;
+      return _moveRes;
     },
     clampShadeToMap(pos) {
       const d = Math.hypot(pos[0], pos[2]);
@@ -166,7 +170,10 @@ function getNight2Map() {
       return onNight2Ground(x, z) ? 0 : null;
     },
     resolveHorizontalMove(_oldX, _oldZ, newX, newZ, _currentY) {
-      return { x: newX, z: newZ, blocked: false };
+      _moveRes.x = newX;
+      _moveRes.z = newZ;
+      _moveRes.blocked = false;
+      return _moveRes;
     },
     clampShadeToMap(pos) {
       // Keep shades within bounding envelope around both islands
@@ -299,7 +306,10 @@ function getNight3Map() {
       z = oldZ;
     }
 
-    return { x, z, blocked };
+    _moveRes.x = x;
+    _moveRes.z = z;
+    _moveRes.blocked = blocked;
+    return _moveRes;
   }
 
   return {

@@ -1,9 +1,11 @@
 {
-  "contract_version": "1.2",
+  "contract_version": "1.3",
   "team": "2A202603427-Nguyen-Vu-Khanh",
   "build_cmd": "npm ci && npm run build",
-  "run_cmd": "npm start",
+  "run_cmd": "node src/run.js",
   "headless_cmd": "node src/headless.js",
+  "bench_cmd": "node src/bench.js",
+  "soak_cmd": "node --expose-gc src/soak.js",
   "tuning": {
     "player_speed": 6.0,
     "dash_speed": 14.0,

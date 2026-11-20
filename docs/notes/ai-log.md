@@ -67,3 +67,19 @@
 ### 3. Lỗi phát hiện & xử lý trong Phase 3
 1. **Scenario `p3_shade_drain_pulse` đặt Mây cách Bóng Mực `4.12 m <= 6 m`:** Ở bước 8 tick đầu tiên, Bóng Mực đang `drain` chuyển ngay sang `chase` theo đúng luật `Mây vào trong 6 m`, nên không phát `fuel_drain` ở tick 60. Phát hiện ngay qua lần chạy test thật $\rightarrow$ tách rõ thành 2 scenario `P3-3a` (`wander -> drain` với Mây ở xa, phát `fuel_drain` đều đặn mỗi 60 tick) và `P3-3b` (Pulse ngay tick 0 trúng Bóng đang `drain` cộng `+15` điểm).
 2. **Độ chính xác ngưỡng `fuel == 30` vs `< 30`:** Dùng số nguyên `fuelUnits` (đơn vị `1/60`) giúp kiểm chứng chính xác tại `1800` đơn vị (đúng `30.0` vẫn còn vùng an toàn `6 m`) và `1799` đơn vị (mất vùng an toàn), loại bỏ hoàn toàn lỗi làm tròn số thực.
+
+---
+
+## Phase 4 (Ticket-04 "Bình minh: phát hành v1.0.0" — Contract v1.3)
+
+### 1. Cập nhật Harness & Hạ tầng phát hành
+- Cập nhật `AGENTS.md`, `.claude/skills/verify-phase/SKILL.md` và `.github/workflows/ci.yml` theo Contract v1.3 (`bench_cmd`, `soak_cmd`, `--export-leaderboard`).
+- Tạo `src/bench.js`, `src/soak.js`, `src/run.js`, `src/leaderboard.js`, `src/sim/benchMode.js` và `Dockerfile`.
+
+### 2. Ước tính Token & Cách tiết kiệm
+| Giai đoạn trong Phase 4 | Ước tính Token | Cách tiết kiệm |
+|---|---|---|
+| Bước 1–2: Contract v1.3, `bench.js`, `soak.js`, `run.js`, `leaderboard.js`, `benchMode.js` | ~26k tokens | Không cài thêm bất kỳ thư viện npm nào (dùng thuần Node.js `http`/`child_process` + trình duyệt hệ thống). |
+| Tối ưu `InstancedMesh` 3D & Accessibility + Leaderboard UI | ~28k tokens | Nâng cấp dùng chung `scene.js` cho cả game thường lẫn bench (`isBenchMode: true`). |
+| Tối ưu zero-allocation cho Soak Test, chạy đo thật (`bench.json`, `soak.json`), Retro & Báo cáo | ~16k tokens | Khử cấp phát trong `step()` & dùng `--expose-gc` đưa tỉ lệ RSS từ `1.312×` xuống `1.058×`. |
+| **Tổng ước tính Phase 4** | **~70k tokens** | Tổng toàn dự án 4 phase ~260k tokens. |

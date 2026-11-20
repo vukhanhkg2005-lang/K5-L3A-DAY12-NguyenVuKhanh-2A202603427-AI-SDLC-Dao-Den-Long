@@ -41,6 +41,8 @@ const WIND_DURATION_TICKS = 300; // 5s
 const WIND_WARNING_TICKS = 120; // 2s
 const WIND_PUSH_SPEED = 2.0;
 
+const EMPTY_EVENTS = Object.freeze([]);
+
 function compareIds(a, b) {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
@@ -293,6 +295,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
       }
       shades.push(makeShade({ id, pos: s.pos, state: st, stateTicksLeft: ticksLeft, targetLanternId }));
     }
+    shades.sort(compareIds);
   }
 
   // Drifters (Gió Lạc)
@@ -337,6 +340,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
         })
       );
     }
+    drifters.sort(compareIds);
   }
 
   // Charms (Bùa Gió)
@@ -408,7 +412,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     return [chosen[0], chosen[1] + 1.0, chosen[2]];
   }
 
-  function spawnOneShade(events) {
+  function spawnOneShade(emit) {
     if (shades.length >= map.maxShades) return false;
     const pos = pickValidShadeSpawn();
     if (!pos) return false;
@@ -421,12 +425,8 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
         stateTicksLeft: SHADE_SPAWN_TELEGRAPH_TICKS,
       })
     );
-    events.push({
-      type: 'event',
-      tick,
-      name: 'shade_spawned',
-      data: { id },
-    });
+    shades.sort(compareIds);
+    emit('shade_spawned', { id });
     return true;
   }
 
@@ -444,6 +444,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
         stolen: 0,
       })
     );
+    drifters.sort(compareIds);
     return true;
   }
 
@@ -478,6 +479,44 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     }
   }
 
+  function findClosestWeakLantern(pos) {
+    let best = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < lanterns.length; i++) {
+      const l = lanterns[i];
+      if (!l.lit || l.fuelUnits >= lowFuelUnits) continue;
+      const d = distXZ(pos, l.pos);
+      if (
+        best === null ||
+        d < bestDist - EPS ||
+        (Math.abs(d - bestDist) <= EPS && l.id < best.id)
+      ) {
+        bestDist = d;
+        best = l;
+      }
+    }
+    return best;
+  }
+
+  function findClosestUnlitLantern(pos) {
+    let best = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < lanterns.length; i++) {
+      const l = lanterns[i];
+      if (l.lit) continue;
+      const d = distXZ(pos, l.pos);
+      if (
+        best === null ||
+        d < bestDist - EPS ||
+        (Math.abs(d - bestDist) <= EPS && l.id < best.id)
+      ) {
+        bestDist = d;
+        best = l;
+      }
+    }
+    return best;
+  }
+
   function findClosestLantern(pos, predicate) {
     let best = null;
     let bestDist = Infinity;
@@ -496,12 +535,18 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     return best;
   }
 
+  let stepEvents = null;
+  function emit(name, data) {
+    if (!stepEvents) stepEvents = [];
+    stepEvents.push({ type: 'event', tick, name, data });
+  }
+
   function step(rawInput = {}) {
     if (state === 'won' || state === 'lost') {
-      return [];
+      return EMPTY_EVENTS;
     }
 
-    const events = [];
+    stepEvents = null;
     tick += 1;
 
     // =========================================================================
@@ -513,16 +558,16 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
 
     if (state === 'playing' && pausePressed) {
       state = 'paused';
-      events.push({ type: 'event', tick, name: 'paused', data: {} });
-      return events;
+      emit('paused', {});
+      return stepEvents;
     }
 
     if (state === 'paused') {
       if (pausePressed) {
         state = 'playing';
-        events.push({ type: 'event', tick, name: 'resumed', data: {} });
+        emit('resumed', {});
       } else {
-        return events;
+        return EMPTY_EVENTS;
       }
     }
 
@@ -567,16 +612,18 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
       }
     }
 
+    // Keep shades & drifters sorted once at scenario init; avoid per-tick array copies
     if (motes.length > 0) {
-      const survivingMotes = [];
-      for (const m of motes) {
+      let writeIdx = 0;
+      for (let i = 0; i < motes.length; i++) {
+        const m = motes[i];
         if (m.ttlTicks !== null) {
           m.ttlTicks -= 1;
           if (m.ttlTicks <= 0) continue;
         }
-        survivingMotes.push(m);
+        motes[writeIdx++] = m;
       }
-      motes = survivingMotes;
+      motes.length = writeIdx;
     }
 
     for (const c of charms) {
@@ -645,25 +692,21 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     }
 
     // Lantern fuel decay (1/60 per tick) + Shade drain (5/60 per tick per draining shade)
-    const sortedShadesForDrain = [...shades].sort(compareIds);
-    for (const l of lanterns) {
+    for (let li = 0; li < lanterns.length; li++) {
+      const l = lanterns[li];
       if (!l.lit) continue;
       l.fuelUnits -= decayPerTickUnits;
 
-      for (const s of sortedShadesForDrain) {
+      for (let si = 0; si < shades.length; si++) {
+        const s = shades[si];
         if (s.state === 'drain' && s.targetLanternId === l.id) {
           l.fuelUnits -= drainPerTickUnits;
           s.drainTickCounter += 1;
           if (s.drainTickCounter % 60 === 0) {
-            events.push({
-              type: 'event',
-              tick,
-              name: 'fuel_drain',
-              data: {
-                lantern_id: l.id,
-                shade_id: s.id,
-                fuel: round1Fuel(l.fuelUnits),
-              },
+            emit('fuel_drain', {
+              lantern_id: l.id,
+              shade_id: s.id,
+              fuel: round1Fuel(l.fuelUnits),
             });
           }
         }
@@ -671,19 +714,16 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     }
 
     // Immediately after Step 2: extinguish any lit lantern with fuel <= 0
-    for (const l of lanterns) {
+    for (let li = 0; li < lanterns.length; li++) {
+      const l = lanterns[li];
       if (l.lit && l.fuelUnits <= 0) {
         l.lit = false;
         l.fuelUnits = 0;
         l.deposited = 0;
         l.everLit = true;
-        events.push({
-          type: 'event',
-          tick,
-          name: 'lantern_out',
-          data: { lantern_id: l.id },
-        });
-        for (const s of shades) {
+        emit('lantern_out', { lantern_id: l.id });
+        for (let si = 0; si < shades.length; si++) {
+          const s = shades[si];
           if (s.state === 'drain' && s.targetLanternId === l.id) {
             s.state = 'wander';
             s.drainTickCounter = 0;
@@ -697,7 +737,18 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     // STEP 3: Move Mây (jump, dash, jump pads, wind) & check fall (Y < -10)
     // =========================================================================
     if (player.respawnWaitTicks === 0) {
-      const [wx, wz] = transformMoveInput(move, camYawDeg);
+      let mxIn = move[0] || 0;
+      let mzIn = move[1] || 0;
+      const inLen = Math.hypot(mxIn, mzIn);
+      if (inLen > 1) {
+        mxIn /= inLen;
+        mzIn /= inLen;
+      }
+      const yawRad = (camYawDeg * Math.PI) / 180;
+      const cosY = Math.cos(yawRad);
+      const sinY = Math.sin(yawRad);
+      const wx = mxIn * cosY + mzIn * sinY;
+      const wz = -mxIn * sinY + mzIn * cosY;
       const moveLen = Math.hypot(wx, wz);
 
       if (moveLen > 1e-4) {
@@ -716,7 +767,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
           player.dashDir = [Math.sin(player.facingYaw), Math.cos(player.facingYaw)];
         }
         player.vel[1] = 0;
-        events.push({ type: 'event', tick, name: 'dash', data: {} });
+        emit('dash', {});
       }
 
       const runSpeed = player.charmTicks > 0 ? CHARM_RUN_SPEED : tuning.player_speed;
@@ -816,16 +867,11 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
         player.launchActive = false;
         player.vel = [0, 0, 0];
 
-        events.push({
-          type: 'event',
-          tick,
-          name: 'player_hit',
-          data: {
-            by: 'fall',
-            flames: player.flames,
-            dropped: 0,
-            lost,
-          },
+        emit('player_hit', {
+          by: 'fall',
+          flames: player.flames,
+          dropped: 0,
+          lost,
         });
 
         if (player.flames > 0) {
@@ -840,25 +886,21 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     if (player.respawnWaitTicks === 0 && player.flames > 0) {
       const capacity = getCarryCapacity();
       if (motes.length > 0 && player.carried < capacity) {
-        const remaining = [];
-        for (const m of motes) {
+        let writeIdx = 0;
+        for (let i = 0; i < motes.length; i++) {
+          const m = motes[i];
           if (
             player.carried < capacity &&
             distXZ(player.pos, m.pos) <= tuning.pickup_radius + EPS &&
             Math.abs(player.pos[1] - m.pos[1]) <= 1.5 + EPS
           ) {
             player.carried += 1;
-            events.push({
-              type: 'event',
-              tick,
-              name: 'mote_picked',
-              data: { carried: player.carried },
-            });
+            emit('mote_picked', { carried: player.carried });
           } else {
-            remaining.push(m);
+            motes[writeIdx++] = m;
           }
         }
-        motes = remaining;
+        motes.length = writeIdx;
       }
 
       for (const c of charms) {
@@ -871,12 +913,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
           c.respawnTicks = CHARM_RESPAWN_TICKS;
           player.charmTicks = CHARM_DURATION_TICKS;
           player.dashCdTicks = 0;
-          events.push({
-            type: 'event',
-            tick,
-            name: 'charm_picked',
-            data: { charm_id: c.id, charm_ticks: CHARM_DURATION_TICKS },
-          });
+          emit('charm_picked', { charm_id: c.id, charm_ticks: CHARM_DURATION_TICKS });
         }
       }
     }
@@ -901,15 +938,10 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
             player.carried -= amount;
             bestLantern.deposited += amount;
             score += amount * scorePerMote;
-            events.push({
-              type: 'event',
-              tick,
-              name: 'deposit',
-              data: {
-                lantern_id: bestLantern.id,
-                amount,
-                deposited: bestLantern.deposited,
-              },
+            emit('deposit', {
+              lantern_id: bestLantern.id,
+              amount,
+              deposited: bestLantern.deposited,
             });
             if (bestLantern.deposited >= reqCost) {
               const isRelight = bestLantern.everLit;
@@ -923,12 +955,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
                 score += scorePerLantern;
               }
               successfulLights += 1;
-              events.push({
-                type: 'event',
-                tick,
-                name: 'lantern_lit',
-                data: { lantern_id: bestLantern.id, relight: isRelight },
-              });
+              emit('lantern_lit', { lantern_id: bestLantern.id, relight: isRelight });
               triggerSafeZonePushOut(bestLantern);
             }
           }
@@ -945,15 +972,10 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
               bestLantern.fuelUnits + used * fuelPerMoteUnits
             );
             score += used * scorePerMote;
-            events.push({
-              type: 'event',
-              tick,
-              name: 'refuel',
-              data: {
-                lantern_id: bestLantern.id,
-                amount: used,
-                fuel: round1Fuel(bestLantern.fuelUnits),
-              },
+            emit('refuel', {
+              lantern_id: bestLantern.id,
+              amount: used,
+              fuel: round1Fuel(bestLantern.fuelUnits),
             });
             if (wasBelowSafe && bestLantern.fuelUnits >= lowFuelUnits) {
               triggerSafeZonePushOut(bestLantern);
@@ -1015,8 +1037,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
       const pulseCenter = [player.pos[0], player.pos[1] + 0.8, player.pos[2]];
       const stunnedIds = [];
 
-      const sortedShades = [...shades].sort(compareIds);
-      for (const s of sortedShades) {
+      for (const s of shades) {
         if (dist3D(pulseCenter, s.pos) <= tuning.pulse_radius + EPS) {
           const wasDraining = s.state === 'drain';
           const dx = s.pos[0] - player.pos[0];
@@ -1037,15 +1058,9 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
         }
       }
 
-      events.push({
-        type: 'event',
-        tick,
-        name: 'pulse',
-        data: { stunned_ids: stunnedIds },
-      });
+      emit('pulse', { stunned_ids: stunnedIds });
 
-      const sortedDrifters = [...drifters].sort(compareIds);
-      for (const d of sortedDrifters) {
+      for (const d of drifters) {
         if (d.state === 'removed') continue;
         if (dist3D(pulseCenter, d.pos) <= tuning.pulse_radius + EPS) {
           if (d.state === 'chase') {
@@ -1070,12 +1085,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
             }
             d.stolen = 0;
             d.fleeTicksLeft = DRIFTER_DROP_FLEE_TICKS;
-            events.push({
-              type: 'event',
-              tick,
-              name: 'drifter_drop',
-              data: { drifter_id: d.id, amount },
-            });
+            emit('drifter_drop', { drifter_id: d.id, amount });
           }
         }
       }
@@ -1184,10 +1194,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
         }
       } else {
         // wander: prioritize closest lit lantern with fuel < 30; else closest unlit lantern
-        const weakLantern = findClosestLantern(
-          s.pos,
-          (l) => l.lit && l.fuelUnits < lowFuelUnits
-        );
+        const weakLantern = findClosestWeakLantern(s.pos);
         if (weakLantern) {
           s.targetLanternId = weakLantern.id;
           const dx = weakLantern.pos[0] - s.pos[0];
@@ -1213,7 +1220,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
             }
           }
         } else {
-          const unlitLantern = findClosestLantern(s.pos, (l) => !l.lit);
+          const unlitLantern = findClosestUnlitLantern(s.pos);
           if (unlitLantern && distXZ(s.pos, unlitLantern.pos) > 2.5) {
             s.targetLanternId = unlitLantern.id;
             const dx = unlitLantern.pos[0] - s.pos[0];
@@ -1320,8 +1327,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     // STEP 9: Collisions — Drifters steal FIRST, then Shades hit (ascending id)
     // =========================================================================
     if (player.respawnWaitTicks === 0 && player.flames > 0) {
-      const sortedDrifters = [...drifters].sort(compareIds);
-      for (const d of sortedDrifters) {
+      for (const d of drifters) {
         if (d.state === 'removed' || d.state === 'flee' || d.hasStolen) continue;
         if (distXZ(player.pos, d.pos) <= DRIFTER_STEAL_RADIUS + EPS && player.carried > 0) {
           const amount = Math.min(3, player.carried);
@@ -1330,18 +1336,12 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
           d.hasStolen = true;
           d.state = 'flee';
           d.fleeTicksLeft = DRIFTER_FLEE_TICKS;
-          events.push({
-            type: 'event',
-            tick,
-            name: 'drifter_steal',
-            data: { drifter_id: d.id, amount, carried: player.carried },
-          });
+          emit('drifter_steal', { drifter_id: d.id, amount, carried: player.carried });
         }
       }
 
       if (player.invulnTicks === 0) {
-        const sortedShades = [...shades].sort(compareIds);
-        for (const s of sortedShades) {
+        for (const s of shades) {
           if (
             s.state === 'spawning' ||
             s.state === 'stunned' ||
@@ -1386,15 +1386,10 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
             s.drainTickCounter = 0;
             s.targetLanternId = null;
 
-            events.push({
-              type: 'event',
-              tick,
-              name: 'player_hit',
-              data: {
-                by: 'shade',
-                flames: player.flames,
-                dropped,
-              },
+            emit('player_hit', {
+              by: 'shade',
+              flames: player.flames,
+              dropped,
             });
             break;
           }
@@ -1419,10 +1414,10 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
 
     if (randomShades) {
       if (simTick === 300) {
-        spawnOneShade(events);
-        spawnOneShade(events);
+        spawnOneShade(emit);
+        spawnOneShade(emit);
       } else if (simTick > 300 && (simTick - 300) % map.shadeSpawnInterval === 0) {
-        spawnOneShade(events);
+        spawnOneShade(emit);
       }
     }
 
@@ -1436,12 +1431,7 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
     if (player.flames <= 0) {
       state = 'lost';
       endReason = 'no_flames';
-      events.push({
-        type: 'event',
-        tick,
-        name: 'game_over',
-        data: { result: 'lost', reason: 'no_flames' },
-      });
+      emit('game_over', { result: 'lost', reason: 'no_flames' });
     } else if (timeLeftTicks <= 0) {
       const litLanterns = lanterns.filter((l) => l.lit);
       const requiredLit = Math.ceil(winRatio * lanterns.length);
@@ -1452,25 +1442,15 @@ export function createSimulation({ seed = 1, night = 1, tuning, scenario = null 
           score += scorePerLitDawn + Math.floor(l.fuelUnits / FUEL_SCALE);
         }
         score += player.flames * scorePerFlameLeft;
-        events.push({
-          type: 'event',
-          tick,
-          name: 'game_over',
-          data: { result: 'won', reason: 'dawn_survived' },
-        });
+        emit('game_over', { result: 'won', reason: 'dawn_survived' });
       } else {
         state = 'lost';
         endReason = 'dawn';
-        events.push({
-          type: 'event',
-          tick,
-          name: 'game_over',
-          data: { result: 'lost', reason: 'dawn' },
-        });
+        emit('game_over', { result: 'lost', reason: 'dawn' });
       }
     }
 
-    return events;
+    return stepEvents || EMPTY_EVENTS;
   }
 
   function getSnapshot() {

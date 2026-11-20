@@ -1,0 +1,54 @@
+
+> dao-den-long@1.0.0 test
+> npm run test:unit && npm run test:scenarios
+
+
+> dao-den-long@1.0.0 test:unit
+> node --test tests/sim.test.js
+
+✔ [P1-P2 Regression] transformMoveInput follows Contract rotation and normalization (1.4119ms)
+✔ [P1-P2 Regression] tick 0 snapshot v1.2, step k -> tick k+1, exact time_left_s, pickup 1.0m (3.802ms)
+✔ [P1-P2 Regression] mote pickup respects dynamic carry capacity (0.4765ms)
+✔ [P1-P2 Regression] pulse (3D 5m, cost 3, stun 120 ticks -> wander, push 4m over 15 ticks, +5 score) (2.7802ms)
+✔ [P1-P2 Regression] safe_radius = 6m blocks Shades when fuel >= 30 and pushes inside shade out <= 30t (1.2174ms)
+✔ [P1-P2 Regression] shade hit drops floor(carried/2) into 1.5-2.5m ring, recoil 60t, invuln 90t (0.3624ms)
+✔ [P2 Regression] Dash, Fall, Night 2 Pad, Night 3 Ramp+Pad, Drifter, Charm, Pause (2.8819ms)
+✔ [P3 Updated] Lighting all 5 lanterns does NOT end early; wins at dawn (dawn_survived) with v1.2 score (1.1918ms)
+✔ [P3 Updated] Dawn loss when lit < 60% and no_flames priority on exact dawn tick (0.4851ms)
+✔ [P3] Exact integer 1/60 fuel decay, lantern_out, relight cost=5 (+40), capacity max=20 (0.575ms)
+✔ [P3] Refuel exact used=ceil((100-fuel)/10), skips full lanterns, restores safe zone & pushes shades (0.6324ms)
+✔ [P3] Safe zone kept at EXACT fuel == 30 and lost at < 30; Shade wander -> drain, fuel_drain every 60t, Pulse +15 (1.2309ms)
+✔ [P3] Shade states stay strictly within the 6 standard Contract v1.2 states (18.2682ms)
+✔ [P3] Validators reject invalid v1.2 inputs/scenario with exitCode 2 (1.7356ms)
+✔ [P4] Benchmark scene spawns exact 200 wander Shades, 100 Motes, L1-L3 lit fuel=100, no decay/damage (7.4761ms)
+✔ [P4] Local leaderboard validation, Vietnamese names, score desc + earliest tie-break, top 10 (23.4146ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 189.9221
+
+> dao-den-long@1.0.0 test:scenarios
+> node tests/run-scenarios.js
+
+PASS: [P1-P3 Updated] S1: Light final lantern (no early win) -> survive to dawn -> dawn_survived
+PASS: [P1-P2 Regression] S2: Pulse pushes 4m over 15t & stuns S1 for 120t (+5 score)
+PASS: [P1-P2 Regression] S3: Shade chases and defeats player (no_flames)
+PASS: [P1-P2 Regression] S4: Lit lantern safe_radius (6m) blocks Shade while fuel >= 30
+PASS: [P2 Regression] P2-1..P2-8: Dash, Fall, Night 2 Pad, Night 3 Ramp, Drifter, Charm, Wind, Pause
+PASS: [P3] P3-1: Lantern fuel decay (1/60), lantern_out, relight cost=5 (+40), capacity 10->12
+PASS: [P3] P3-2: Refuel low lantern from <30 to 100 (+5/mote) & push draining Shade out of safe zone
+PASS: [P3] P3-3a: Shade wanders to weak lantern (<30), enters drain, emits fuel_drain every 60t
+PASS: [P3] P3-3b: Pulse hitting a draining Shade awards +15 score
+PASS: [P3] P3-4: Dawn loss when lit lanterns < 60% (2/5 on Night 1)
+PASS: [P3] Determinism Night 1 (seed 2026, 1500 ticks byte-identical)
+PASS: [P3] Determinism Night 2 (seed 2026, 1500 ticks byte-identical)
+PASS: [P3] Determinism Night 3 (seed 2026, 1500 ticks byte-identical)
+PASS: [P1-P3 Regression] Invalid inputs (non-increasing ticks) exits with code 2
+  -> Night 3 full 18,000-tick headless time: 0.378 s (budget <= 30 s)
+PASS: [P3 Benchmark] Full Night 3 (18,000 ticks = 300s v1.2 with Shades+Drifters+Wind) <= 30s
+
+All 15 headless contract v1.2 checks passed!

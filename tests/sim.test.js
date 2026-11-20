@@ -612,3 +612,81 @@ test('[P3] Validators reject invalid v1.2 inputs/scenario with exitCode 2', () =
     (err) => err instanceof ContractFormatError && err.exitCode === 2
   );
 });
+
+// =============================================================================
+// PHASE 4 TESTS (CONTRACT v1.3: BENCH SCENE & LOCAL LEADERBOARD)
+// =============================================================================
+import os from 'node:os';
+import {
+  validatePlayerName,
+  addLeaderboardEntry,
+  exportLeaderboard,
+  readLeaderboard,
+} from '../src/leaderboard.js';
+import { createBenchSimulation } from '../src/sim/benchMode.js';
+
+test('[P4] Benchmark scene spawns exact 200 wander Shades, 100 Motes, L1-L3 lit fuel=100, no decay/damage', () => {
+  const bench = createBenchSimulation({ seed: 42, tuning });
+  const s0 = bench.getRenderState();
+  assert.equal(s0.shades.length, 200);
+  assert.equal(s0.motes.length, 100);
+  assert.ok(s0.shades.every((s) => s.state === 'wander'));
+  assert.deepEqual(
+    s0.lanterns.map((l) => l.lit),
+    [true, true, true, false, false]
+  );
+  assert.deepEqual(
+    s0.lanterns.slice(0, 3).map((l) => l.fuel),
+    [100, 100, 100]
+  );
+
+  // Run 120 ticks -> counts unchanged, fuel unchanged, Mây stationary at (0,0,0), Shades move
+  const prevPos = [...s0.shades[0].pos];
+  for (let i = 0; i < 120; i++) bench.step();
+  const s120 = bench.getRenderState();
+  assert.equal(s120.shades.length, 200);
+  assert.equal(s120.motes.length, 100);
+  assert.deepEqual(s120.player.pos, [0, 0, 0]);
+  assert.equal(s120.lanterns[0].fuel, 100);
+  assert.ok(
+    Math.hypot(s120.shades[0].pos[0] - prevPos[0], s120.shades[0].pos[2] - prevPos[2]) > 0.1
+  );
+});
+
+test('[P4] Local leaderboard validation, Vietnamese names, score desc + earliest tie-break, top 10', () => {
+  assert.equal(validatePlayerName('ab'), false); // < 3
+  assert.equal(validatePlayerName('abcdefghijklm'), false); // > 12
+  assert.equal(validatePlayerName('bad name'), false); // space
+  assert.equal(validatePlayerName('May_01'), true);
+  assert.equal(validatePlayerName('MâyĐèn'), true); // Vietnamese Unicode bonus
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ddl-lb-test-'));
+  const lbFile = path.join(tmpDir, 'leaderboard.json');
+  const exportFile = path.join(tmpDir, 'export.json');
+
+  for (let i = 0; i < 12; i++) {
+    addLeaderboardEntry(
+      {
+        name: `Player_${i}`,
+        score: i === 5 ? 900 : i === 8 ? 900 : i * 100,
+        nights_won: i % 4,
+        achieved_at: `2026-11-20T10:${String(i).padStart(2, '0')}:00+07:00`,
+        seed: 2026 + i,
+      },
+      lbFile
+    );
+  }
+
+  const stored = readLeaderboard(lbFile);
+  assert.equal(stored.entries.length, 10);
+  assert.equal(stored.entries[0].score, 1100);
+  // Equal score 900: Player_5 achieved earlier (10:05) than Player_8 (10:08) -> Player_5 first!
+  const idx5 = stored.entries.findIndex((e) => e.name === 'Player_5');
+  const idx8 = stored.entries.findIndex((e) => e.name === 'Player_8');
+  assert.ok(idx5 >= 0 && idx8 > idx5);
+
+  exportLeaderboard(exportFile, lbFile);
+  const exported = JSON.parse(fs.readFileSync(exportFile, 'utf8'));
+  assert.equal(exported.entries.length, 10);
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});

@@ -1,0 +1,12 @@
+{
+  "contract_version": "1.3",
+  "avg_fps": 882.8,
+  "p1_low_fps": 368,
+  "frame_ms_p95": 1.8,
+  "frames": 26484,
+  "load_ms": 1524,
+  "peak_mem_mb": null,
+  "vsync_off": true,
+  "renderer": "Three.js r170 / ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU (0x000025E2) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "os": "Windows_NT 10.0.26200 (x64)"
+}
