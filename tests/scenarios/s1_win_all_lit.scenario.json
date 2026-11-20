@@ -6,10 +6,10 @@
   "shades": [],
   "lanterns": [
     { "id": "L1", "pos": [0, 0, 12], "deposited": 0, "lit": false },
-    { "id": "L2", "lit": true },
-    { "id": "L3", "lit": true },
-    { "id": "L4", "lit": true },
-    { "id": "L5", "lit": true }
+    { "id": "L2", "lit": true, "fuel": 80 },
+    { "id": "L3", "lit": true, "fuel": 80 },
+    { "id": "L4", "lit": true, "fuel": 80 },
+    { "id": "L5", "lit": true, "fuel": 80 }
   ],
-  "time_left_s": 180
+  "time_left_s": 3
 }

@@ -47,3 +47,23 @@
 3. **Off-by-1 trong unit test kiểm tra 120 tick choáng:** Xác minh lại chu kỳ tick `1..120` đang choáng và tick `121` hết choáng, cập nhật assert kiểm tra cả 2 mốc.
 4. **Reset rising-edge phím `pause` trong GUI (`src/main.js`):** Đảm bảo vòng lặp GUI vẫn gửi `pause: false` khi đang tạm dừng (không làm tăng `sim_tick`) để lần bấm `Esc` tiếp theo kích hoạt rising-edge `resumed` chuẩn xác.
 5. **Benchmark 21.600 tick dừng sớm do gió & Bóng Mực:** Lần chạy đầu người chơi đứng yên trên Đảo Chuông bị gió thổi và Bóng Mực hạ trước tick 21.600 $\rightarrow$ tạo `p2_bench_21600.scenario.json` (`flames: 300`, bật đủ Shades + Drifters + Wind) để đo đúng đủ **21.600 / 21.600 tick** thật (`0.325 s`).
+
+---
+
+## Phase 3 (Ticket-03 Change Request "Đèn cạn dầu" — Contract v1.2)
+
+### 1. Cập nhật Harness & Tài liệu Kiến trúc
+- Cập nhật `AGENTS.md` và `.claude/skills/verify-phase/SKILL.md` theo quy tắc Contract v1.2 (đơn vị nhiên liệu nguyên `1/60`, trạng thái `drain`, luật thắng `dawn_survived`, cấm `.skip()` âm thầm).
+- Viết ADR [docs/adr/001-lantern-fuel-and-dawn-win.md](../adr/001-lantern-fuel-and-dawn-win.md) và [CHANGELOG.md](../../CHANGELOG.md) liệt kê đầy đủ Breaking Changes.
+
+### 2. Ước tính Token & Cách tiết kiệm
+| Giai đoạn trong Phase 3 | Ước tính Token | Cách tiết kiệm |
+|---|---|---|
+| Bước 1–2: Harness, ADR-001, CHANGELOG, Contract v1.2 & nâng cấp `simulation.js`/`validators.js` | ~24k tokens | Giữ nguyên cấu trúc 12 bước/tick từ Phase 2, chỉ chèn logic nhiên liệu nguyên `1/60` & trạng thái `drain` sạch sẽ. |
+| Bước 3: Cập nhật test cũ + viết 5 scenario mới Phase 3 + chạy kiểm chứng | ~13k tokens | Dùng lại khung `tests/run-scenarios.js` và `node:test`, lưu bằng chứng thực tế tự động bằng cờ `--save-evidence`. |
+| Bước 4–5: Thanh dầu 3D, đèn xẹp/rách, chế độ mù màu, HUD động 10–20 ô, README & Report | ~18k tokens | Chỉ `edit_file` vào các khối thay đổi trong `scene.js`, `index.html`, `style.css` thay vì viết lại toàn file. |
+| **Tổng ước tính Phase 3** | **~55k tokens** | Thiết kế mô-đun tốt từ Phase 2 giúp hấp thụ Change Request lớn gọn nhẹ và ít token. |
+
+### 3. Lỗi phát hiện & xử lý trong Phase 3
+1. **Scenario `p3_shade_drain_pulse` đặt Mây cách Bóng Mực `4.12 m <= 6 m`:** Ở bước 8 tick đầu tiên, Bóng Mực đang `drain` chuyển ngay sang `chase` theo đúng luật `Mây vào trong 6 m`, nên không phát `fuel_drain` ở tick 60. Phát hiện ngay qua lần chạy test thật $\rightarrow$ tách rõ thành 2 scenario `P3-3a` (`wander -> drain` với Mây ở xa, phát `fuel_drain` đều đặn mỗi 60 tick) và `P3-3b` (Pulse ngay tick 0 trúng Bóng đang `drain` cộng `+15` điểm).
+2. **Độ chính xác ngưỡng `fuel == 30` vs `< 30`:** Dùng số nguyên `fuelUnits` (đơn vị `1/60`) giúp kiểm chứng chính xác tại `1800` đơn vị (đúng `30.0` vẫn còn vùng an toàn `6 m`) và `1799` đơn vị (mất vùng an toàn), loại bỏ hoàn toàn lỗi làm tròn số thực.
