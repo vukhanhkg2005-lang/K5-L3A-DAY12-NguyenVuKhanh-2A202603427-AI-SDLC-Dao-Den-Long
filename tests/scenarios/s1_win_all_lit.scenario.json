@@ -1,5 +1,5 @@
 {
-  "player": { "pos": [0, 0, 0], "carried": 0, "flames": 3 },
+  "player": { "pos": [0, 0, 0], "carried": 6, "flames": 3 },
   "random_motes": false,
   "random_shades": false,
   "motes": [[0, 0, 3], [0, 0, 5], [0, 0, 7], [0, 0, 9]],

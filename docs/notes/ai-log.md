@@ -24,3 +24,26 @@
 2. **Đặt `npm install` trong sandbox bị chặn mạng (`403 Forbidden`):** Chỉ cấp quyền chạy ngoài sandbox riêng cho bước `npm install`; toàn bộ bước test, headless và `vite build` chạy sạch cục bộ không cần mạng.
 3. **Biên đảo cứng khi scenario đặt thực thể xa:** Chủ động phát hiện rủi ro nếu bài test ẩn đặt đèn/Bóng Mực ngoài bán kính mặc định `42 m` $\rightarrow$ thiết kế `effectiveIslandRadius = Math.max(42, maxEntityDist + 10)` ngay trong `src/sim/simulation.js`.
 4. **Rơi đom đóm khi bị đánh (`hit_drop_ratio`):** Nếu sinh lại đom đóm ngay tại chân người chơi khi bị đánh thì ngay tick kế tiếp người chơi sẽ tự nhặt lại (làm sai `carried` và phát thêm `mote_picked` ngoài ý muốn) $\rightarrow$ thiết kế đom đóm rơi tan vào sương và ghi rõ giả định trong `docs/notes/phase-1-assumptions.md`.
+
+---
+
+## Phase 2 (Ticket-02 "Ba hòn đảo" — Contract v1.1)
+
+### 1. Cập nhật Harness AI
+- Cập nhật `AGENTS.md` và `.claude/skills/verify-phase/SKILL.md` bổ sung quy tắc 12 bước/tick, 5 trạng thái Bóng Mực chuẩn (`spawning`, `wander`, `chase`, `recoil`, `stunned`), quy tắc regression Phase 1 và ngưỡng benchmark `21.600 tick <= 30 s`.
+- Viết `docs/phase2-spec.md` với bảng truy vết thay đổi Phase 1 $\rightarrow$ Phase 2 và Acceptance Criteria trước khi viết code.
+
+### 2. Ước tính Token & Cách tiết kiệm
+| Giai đoạn trong Phase 2 | Ước tính Token | Cách tiết kiệm |
+|---|---|---|
+| Bước 1–2: Cập nhật Harness, Spec, Contract v1.1, 3 Maps, Sim 12 bước | ~28k tokens | Thiết kế dùng bộ đếm tick số nguyên và tách `src/sim/maps.js` riêng gọn gàng. |
+| Bước 3: Unit test, Regression P1, 8 Scenarios P2, Determinism 3 Đêm, Benchmark 21.600 tick | ~14k tokens | Dừng kiểm chứng Headless 100% xanh trước khi chạm UI để tránh sửa dây chuyền. |
+| Bước 4–5: Nâng cấp Three.js 3 đảo, bảng màu chuẩn, HUD đầy đủ, Audio 10 SFX, Menu/Pause/Settings, Report | ~33k tokens | Ghi song song toàn bộ file UI/render/docs trong từng đợt, không đọc lại file đã biết. |
+| **Tổng ước tính Phase 2** | **~75k tokens** | Luồng chia chặng Bước 1–3 $\rightarrow$ Bước 4–5 giảm hẳn rủi ro viết lại. |
+
+### 3. Lỗi AI tự phát hiện & sửa trong Phase 2
+1. **Dừng sớm khi `paused` trong `src/headless.js`:** Vòng lặp Phase 1 dùng `state !== 'playing'` sẽ ngắt ngay khi `state === 'paused'` $\rightarrow$ sửa thành `sim.isFinished()` (`won` hoặc `lost`).
+2. **Lướt trên không ở tick thứ 12:** Biến `isDashingThisTick` ban đầu tính sau khi giảm `dashTicksLeft -= 1` khiến tick cuối của cú lướt chịu trọng lực $\rightarrow$ tính `isDashingThisTick` trước khi giảm bộ đếm.
+3. **Off-by-1 trong unit test kiểm tra 120 tick choáng:** Xác minh lại chu kỳ tick `1..120` đang choáng và tick `121` hết choáng, cập nhật assert kiểm tra cả 2 mốc.
+4. **Reset rising-edge phím `pause` trong GUI (`src/main.js`):** Đảm bảo vòng lặp GUI vẫn gửi `pause: false` khi đang tạm dừng (không làm tăng `sim_tick`) để lần bấm `Esc` tiếp theo kích hoạt rising-edge `resumed` chuẩn xác.
+5. **Benchmark 21.600 tick dừng sớm do gió & Bóng Mực:** Lần chạy đầu người chơi đứng yên trên Đảo Chuông bị gió thổi và Bóng Mực hạ trước tick 21.600 $\rightarrow$ tạo `p2_bench_21600.scenario.json` (`flames: 300`, bật đủ Shades + Drifters + Wind) để đo đúng đủ **21.600 / 21.600 tick** thật (`0.325 s`).
