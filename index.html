@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Đảo Đèn Lồng — Đêm 1: Đảo Bến</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="canvas-root"></div>
+
+    <!-- HUD -->
+    <div id="hud" aria-live="polite">
+      <div class="hud-top">
+        <div class="hud-panel">
+          <div class="hud-title">ĐẢO ĐÈN LỒNG · ĐÊM 1: ĐẢO BẾN</div>
+          <div class="hud-stats">
+            <div class="stat" title="Máu (Ngọn lửa)">
+              <span class="stat-label">Ngọn lửa</span>
+              <span id="hud-flames" class="stat-value flames">🔥🔥🔥</span>
+            </div>
+            <div class="stat" title="Đom đóm đang mang">
+              <span class="stat-label">Đom đóm</span>
+              <span id="hud-motes" class="stat-value gold">0 / 8</span>
+            </div>
+            <div class="stat" title="Đèn Lồng Lớn đã thắp">
+              <span class="stat-label">Đèn Lồng</span>
+              <span id="hud-lanterns" class="stat-value gold">0 / 5</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-panel hud-right">
+          <div class="hud-stats">
+            <div class="stat">
+              <span class="stat-label">Thời gian</span>
+              <span id="hud-time" class="stat-value">05:00</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Điểm</span>
+              <span id="hud-score" class="stat-value gold">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Tỏa sáng</span>
+              <span id="hud-pulse" class="stat-value pulse-ready">Sẵn sàng</span>
+            </div>
+          </div>
+          <div class="hud-actions">
+            <button id="btn-audio" class="hud-btn" type="button">🔊 Âm thanh (M)</button>
+            <button id="btn-restart-hud" class="hud-btn" type="button">↻ Chơi lại (R)</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="context-prompt" class="context-prompt hidden"></div>
+
+      <div class="hud-bottom">
+        <div class="controls-bar">
+          <span><kbd>WASD</kbd> Di chuyển</span>
+          <span><kbd>Space</kbd> Nhảy</span>
+          <span><kbd>E</kbd> Nạp / Thắp đèn</span>
+          <span><kbd>Shift</kbd> Tỏa sáng (tốn 2 đom đóm)</span>
+          <span><kbd>Kéo chuột</kbd> / <kbd>J</kbd><kbd>L</kbd> Xoay camera</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start / End Overlay -->
+    <div id="overlay" class="overlay">
+      <div class="overlay-card">
+        <div class="overlay-badge">ĐÊM 1 · ĐẢO BẾN</div>
+        <h1 id="overlay-title">Đảo Đèn Lồng</h1>
+        <p id="overlay-desc">
+          Điều khiển <strong>Mây</strong> thu thập đom đóm vàng cam để thắp sáng đủ
+          <strong>5 Đèn Lồng Lớn</strong> trước bình minh. Né <strong>Bóng Mực</strong> trong sương đêm
+          hoặc dùng <strong>Tỏa sáng (Shift)</strong> để xua đuổi chúng!
+        </p>
+        <div id="overlay-stats" class="overlay-stats hidden"></div>
+        <button id="btn-play" class="primary-btn" type="button">Bắt đầu Đêm 1</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
